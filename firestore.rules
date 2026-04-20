@@ -1,0 +1,187 @@
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: users
+    // Fields: id, name, username, role, status, assignedBuildings, assignedUnits, isManto, specialty, phone, leaveDays
+    //
+    // Collection: readings
+    // Fields: id, buildingId, date, timestamp, userId, serviceType, origin, value1, consumption1
+    //
+    // Collection: requests
+    // Fields: id, type, unit, buildingId, description, status, urgency, date
+    //
+    // Collection: tasks
+    // Fields: id, title, description, date, status
+    //
+    // ... and others
+    // ===============================================================
+
+    // ===============================================================
+    // Helper Functions
+    // ===============================================================
+    
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'MASTER' || 
+         (request.auth.token.email == "JCYebenes@gmail.com" && request.auth.token.email_verified == true) ||
+         (request.auth.token.email == "jyebavi@sigai.local"));
+    }
+
+    function isOficina() {
+      return isAuthenticated() && 
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userCategory == 'Oficina de Control' || isAdmin());
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    // ===============================================================
+    // Domain Validators
+    // ===============================================================
+
+    function isValidUser(data) {
+      return data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.role is string && data.status is string;
+    }
+
+    function isValidReading(data) {
+      return data.buildingId is string && data.serviceType is string && data.value1 is number;
+    }
+
+    function isValidOCACertificate(data) {
+      return data.title is string && data.title.size() > 0 && data.title.size() < 200 &&
+             data.category is string &&
+             data.buildingId is string &&
+             data.lastInspectionDate is string &&
+             data.expirationDate is string &&
+             data.status is string &&
+             (!('maintenanceCompany' in data) || (data.maintenanceCompany is string && data.maintenanceCompany.size() < 200)) &&
+             (!('budgetAmount' in data) || data.budgetAmount is number);
+    }
+
+    // Collection Rules
+    // ===============================================================
+ 
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data);
+      allow update: if isAuthenticated() && (isOwner(userId) || isAdmin()) && isValidUser(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Readings (Water, Light, etc.)
+    match /readings/{readingId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidReading(request.resource.data);
+      allow update: if isAuthenticated() && isValidReading(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Requests (Maintenance/Material)
+    match /requests/{requestId} {
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Tasks
+    match /tasks/{taskId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    // Gasoil
+    match /gasoil_tanks/{id} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /gasoil_readings/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+    match /refuel_requests/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+
+    // Salt
+    match /salt_stock/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+    match /salt_softeners/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+    match /salt_refill_logs/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+    match /salt_entry_logs/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+
+    // Water
+    match /water_accounts/{id} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /water_sync_logs/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+
+    // Notifications
+    match /notifications/{id} {
+      allow read: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.userId == 'all');
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.userId == 'all');
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || resource.data.userId == 'all');
+    }
+
+    // External Contacts
+    match /external_contacts/{id} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+
+    // Boilers
+    match /boilers/{id} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /boiler_readings/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+    match /boiler_maintenance/{id} { allow read: if isAuthenticated(); allow write: if isAuthenticated(); }
+
+    // Providers & Categories
+    match /providers/{id} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+    match /categories/{id} { allow read: if isAuthenticated(); allow write: if isAdmin(); }
+
+    // Electrical Designs
+    match /electrical_designs/{designId} {
+      allow read: if isAuthenticated() && (resource == null || resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isAuthenticated() && request.resource.data.userId == request.auth.uid;
+      allow update: if isAuthenticated() && resource.data.userId == request.auth.uid && request.resource.data.userId == request.auth.uid;
+      allow delete: if isAuthenticated() && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // Leave Requests (Permissions)
+    match /leave_requests/{id} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated();
+      allow delete: if isAdmin();
+    }
+
+    // Blueprints
+    match /blueprints/{id} {
+      allow read: if isOficina();
+      allow write: if isOficina();
+    }
+
+    // PPTs (Pliegos)
+    match /ppts/{id} {
+      allow read: if isOficina();
+      allow write: if isOficina();
+    }
+
+    // OCA Certificates
+    match /oca_certificates/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOficina() && isValidOCACertificate(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Default deny
+    match /{path=**} {
+      allow read, write: if false;
+    }
+  }
+}

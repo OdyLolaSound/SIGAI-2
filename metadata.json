@@ -1,0 +1,6 @@
+{
+  "name": "1.6 SIGAI-USAC",
+  "short_name": "SIGAI",
+  "description": "Sistema Integrado de Gestión de Apoyo a las Instalaciones USAC con Sincronización Cloud y Control de Acceso Maestro.",
+  "requestFramePermissions": []
+}

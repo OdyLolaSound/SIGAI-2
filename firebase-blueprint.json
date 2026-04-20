@@ -1,0 +1,164 @@
+
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user or technician",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "password": { "type": "string" },
+        "role": { "type": "string" },
+        "status": { "type": "string" },
+        "assignedBuildings": { "type": "array", "items": { "type": "string" } },
+        "assignedUnits": { "type": "array", "items": { "type": "string" } },
+        "isManto": { "type": "boolean" },
+        "specialty": { "type": "string" },
+        "phone": { "type": "string" },
+        "leaveDays": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["id", "name", "username", "role", "status"]
+    },
+    "Reading": {
+      "title": "Reading",
+      "description": "Utility reading (water, light, etc.)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "buildingId": { "type": "string" },
+        "date": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userId": { "type": "string" },
+        "serviceType": { "type": "string" },
+        "origin": { "type": "string" },
+        "value1": { "type": "number" },
+        "consumption1": { "type": "number" }
+      },
+      "required": ["id", "buildingId", "date", "serviceType", "value1"]
+    },
+    "Request": {
+      "title": "Request",
+      "description": "Maintenance request or material request",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "type": { "type": "string" },
+        "unit": { "type": "string" },
+        "buildingId": { "type": "string" },
+        "description": { "type": "string" },
+        "status": { "type": "string" },
+        "urgency": { "type": "string" },
+        "date": { "type": "string" }
+      },
+      "required": ["id", "type", "unit", "status", "date"]
+    },
+    "Task": {
+      "title": "Task",
+      "description": "Calendar task",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "description": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "title", "date", "status"]
+    },
+    "ElectricalDesign": {
+      "title": "Electrical Design",
+      "description": "Saved electrical panel design",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "rooms": { "type": "array" },
+        "circuits": { "type": "array" },
+        "budget": { "type": "array" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "name", "rooms"]
+    },
+    "OCACertificate": {
+      "title": "OCA Certificate",
+      "description": "Legal maintenance inspection or OCA certificate",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "buildingId": { "type": "string" },
+        "buildingName": { "type": "string" },
+        "installation": { "type": "string" },
+        "denomination": { "type": "string" },
+        "legislation": { "type": "string" },
+        "capacity": { "type": "string" },
+        "industryRegistrationDate": { "type": "string" },
+        "inspectionType": { "type": "string" },
+        "frequency": { "type": "string" },
+        "lastInspectionDate": { "type": "string" },
+        "expirationDate": { "type": "string" },
+        "periodicityYears": { "type": "number" },
+        "type": { "type": "string" },
+        "isSectorial": { "type": "boolean" },
+        "maintenanceCompany": { "type": "string" },
+        "contact": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "documentUrl": { "type": "string" },
+        "budgetRequested": { "type": "boolean" },
+        "budgetReceived": { "type": "boolean" },
+        "budgetAmount": { "type": "number" }
+      },
+      "required": ["id", "title", "category", "buildingId", "lastInspectionDate", "expirationDate", "status"]
+    }
+  },
+  "firestore": {
+    "users": {
+      "schema": "User",
+      "description": "Collection of system users"
+    },
+    "readings": {
+      "schema": "Reading",
+      "description": "Collection of utility readings"
+    },
+    "requests": {
+      "schema": "Request",
+      "description": "Collection of maintenance and material requests"
+    },
+    "tasks": {
+      "schema": "Task",
+      "description": "Collection of calendar tasks"
+    },
+    "gasoil_tanks": { "schema": "object", "description": "Gasoil tanks" },
+    "gasoil_readings": { "schema": "object", "description": "Gasoil readings" },
+    "refuel_requests": { "schema": "object", "description": "Refuel requests" },
+    "salt_stock": { "schema": "object", "description": "Salt stock" },
+    "salt_softeners": { "schema": "object", "description": "Salt softeners" },
+    "salt_refill_logs": { "schema": "object", "description": "Salt refill logs" },
+    "salt_entry_logs": { "schema": "object", "description": "Salt entry logs" },
+    "water_accounts": { "schema": "object", "description": "Water accounts" },
+    "water_sync_logs": { "schema": "object", "description": "Water sync logs" },
+    "notifications": { "schema": "object", "description": "Notifications" },
+    "external_contacts": { "schema": "object", "description": "External contacts" },
+    "boilers": { "schema": "object", "description": "Boilers" },
+    "boiler_readings": { "schema": "object", "description": "Boiler readings" },
+    "boiler_maintenance": { "schema": "object", "description": "Boiler maintenance" },
+    "providers": { "schema": "object", "description": "Providers" },
+    "categories": { "schema": "object", "description": "Categories" },
+    "leave_requests": { "schema": "object", "description": "Leave requests" },
+    "blueprints": { "schema": "object", "description": "Blueprints" },
+    "ppts": { "schema": "object", "description": "PPTs" },
+    "oca_certificates": {
+      "schema": "OCACertificate",
+      "description": "Collection of legal maintenance inspections and OCA certificates"
+    },
+    "electrical_designs": {
+      "schema": "ElectricalDesign",
+      "description": "Collection of saved electrical panel designs"
+    }
+  }
+}
