@@ -23,6 +23,7 @@ import LaborCalendar from './components/LaborCalendar';
 import OCAModule from './components/OCAModule';
 import PPTModule from './components/PPTModule';
 import BlueprintsModule from './components/BlueprintsModule';
+import ProvidersModule from './components/ProvidersModule';
 import { RTIModule } from './components/RTIModule';
 import VoiceAssistant from './components/VoiceAssistant';
 import { AppTab, ServiceType, Building, User, Role } from './types';
@@ -323,7 +324,7 @@ const App: React.FC = () => {
   };
 
   const handleBack = () => {
-    if ([AppTab.AI_REQUEST, AppTab.AI_MATERIAL, AppTab.USAC_MANAGER, AppTab.CALENDAR, AppTab.TEAM, AppTab.GASOIL, AppTab.BOILERS, AppTab.SALT, AppTab.TEMPERATURES, AppTab.MAINTENANCE, AppTab.WATER_SYNC, AppTab.HISTORY, AppTab.TOOLS, AppTab.OCA, AppTab.PPTS, AppTab.BLUEPRINTS, AppTab.RTI].includes(activeTab)) {
+    if ([AppTab.AI_REQUEST, AppTab.AI_MATERIAL, AppTab.USAC_MANAGER, AppTab.CALENDAR, AppTab.TEAM, AppTab.GASOIL, AppTab.BOILERS, AppTab.SALT, AppTab.TEMPERATURES, AppTab.MAINTENANCE, AppTab.WATER_SYNC, AppTab.HISTORY, AppTab.TOOLS, AppTab.OCA, AppTab.PPTS, AppTab.BLUEPRINTS, AppTab.RTI, AppTab.PROVIDERS].includes(activeTab)) {
        setActiveTab(AppTab.HOME);
        setUnitMenuOpen(true);
        return;
@@ -396,6 +397,7 @@ const App: React.FC = () => {
     if (activeTab === AppTab.PPTS && (currentUser?.role === 'MASTER' || currentUser?.userCategory === 'Oficina de Control')) return <PPTModule user={currentUser} />;
     if (activeTab === AppTab.OCA && (currentUser?.role === 'MASTER' || currentUser?.userCategory === 'Oficina de Control')) return <OCAModule />;
     if (activeTab === AppTab.RTI && (currentUser?.role === 'MASTER' || currentUser?.userCategory === 'Oficina de Control')) return <RTIModule />;
+    if (activeTab === AppTab.PROVIDERS) return <ProvidersModule onBack={() => { setActiveTab(AppTab.HOME); setUnitMenuOpen(true); }} />;
 
     if (activeTab === AppTab.TOOLS) {
       return <ToolsModule onBack={() => { setActiveTab(AppTab.HOME); setUnitMenuOpen(true); }} />;
@@ -435,14 +437,14 @@ const App: React.FC = () => {
 
     if (!selectedService && !unitMenuOpen && activeTab === AppTab.HOME) {
       return (
-        <div className="flex flex-col items-center w-full py-6 animate-in fade-in zoom-in-95 max-w-sm mx-auto">
+        <div className="flex flex-col items-center w-full py-6 animate-in fade-in zoom-in-95 max-w-sm md:max-w-4xl mx-auto">
           <div className="text-center mb-8 px-4">
-            <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1">SIGAI-USAC</h2>
-            <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.4em]">Gestión de Instalaciones</p>
+            <h2 className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter uppercase mb-1">SIGAI-USAC</h2>
+            <p className="text-gray-400 text-[10px] md:text-sm font-black uppercase tracking-[0.4em]">Gestión de Instalaciones</p>
           </div>
           
-          <div className="grid grid-cols-2 gap-4 w-full px-2">
-            {currentUser?.assignedUnits?.includes('USAC') && <UnitButton icon="🏢" label='USAC "Rojas Navarrete"' onClick={() => handleUnitClick('USAC')} full />}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-2">
+            {currentUser?.assignedUnits?.includes('USAC') && <UnitButton icon="🏢" label='USAC "Rojas Navarrete"' onClick={() => handleUnitClick('USAC')} fullMobile />}
             {currentUser?.assignedUnits?.includes('CG') && <UnitButton icon="🏛️" label="Cuartel General" onClick={() => handleUnitClick('CG')} />}
             {currentUser?.assignedUnits?.includes('GCG') && <UnitButton icon="👥" label="Grupo C. General" onClick={() => handleUnitClick('GCG')} />}
             {currentUser?.assignedUnits?.includes('GOE3') && <UnitButton icon="⚔️" label="GOE III" onClick={() => handleUnitClick('GOE3')} />}
@@ -452,20 +454,20 @@ const App: React.FC = () => {
             {currentUser?.assignedUnits?.includes('CECOM') && <UnitButton icon="📡" label="CECOM" onClick={() => handleUnitClick('CECOM')} />}
           </div>
 
-          <div className="w-full px-2 mt-8 space-y-4">
+          <div className="w-full px-2 mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
             <button 
               onClick={() => { 
                 setAuthRole('USAC'); 
                 setAuthInitialView('login');
                 setShowAuthModal(true); 
               }}
-              className="w-full p-6 bg-white border-2 border-gray-900 text-gray-900 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-lg flex items-center justify-center gap-4 active:scale-95 transition-all"
+              className="w-full p-6 bg-white border-2 border-gray-900 text-gray-900 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-lg flex items-center justify-center gap-4 active:scale-95 transition-all md:h-full"
             >
               <UserPlus className="w-5 h-5" /> Solicitar Registro / Alta Técnico
             </button>
 
             {isAuthorized && (
-              <button onClick={() => setActiveTab(AppTab.ADMIN)} className="w-full p-6 bg-gray-900 text-yellow-400 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all">
+              <button onClick={() => setActiveTab(AppTab.ADMIN)} className="w-full p-6 bg-gray-900 text-yellow-400 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all md:h-full">
                 <ShieldCheck className="w-5 h-5" /> {isMaster ? 'Control Maestro SIGAI' : 'Panel Gestión USAC'}
               </button>
             )}
@@ -495,12 +497,12 @@ const App: React.FC = () => {
       }
 
       return (
-        <div className="space-y-4 py-6 w-full max-w-sm mx-auto animate-in slide-in-from-bottom-5">
+        <div className="space-y-4 py-6 w-full max-w-sm md:max-w-4xl mx-auto animate-in slide-in-from-bottom-5">
           <div className="text-center mb-8 px-4">
-            <h2 className="text-2xl font-black uppercase tracking-tight">Seleccionar Edificio</h2>
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">{selectedService.toUpperCase()}</p>
+            <h2 className="text-2xl md:text-4xl font-black uppercase tracking-tight">Seleccionar Edificio</h2>
+            <p className="text-[10px] md:text-sm text-gray-400 font-bold uppercase tracking-widest">{selectedService.toUpperCase()}</p>
           </div>
-          <div className="grid grid-cols-1 gap-4 px-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 px-2">
             {visibleBuildings.map(b => (
               <button 
                 key={b.id} 
@@ -530,7 +532,7 @@ const App: React.FC = () => {
     if (activeTab === AppTab.ADMIN && isAuthorized && currentUser) return <AdminPanel currentUser={currentUser} />;
     
     if (activeTab === AppTab.SETTINGS && currentUser) return (
-      <div className="p-6 space-y-10 max-w-sm mx-auto w-full pb-12">
+      <div className="p-6 space-y-10 max-w-sm md:max-w-4xl mx-auto w-full pb-12">
          <div>
            <h2 className="text-2xl font-black uppercase tracking-tighter mb-4">Mi Perfil</h2>
            <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-xl flex items-center justify-between">
@@ -618,14 +620,14 @@ const App: React.FC = () => {
 
     // FALLBACK: If we are here and nothing matched, show the main unit selection
     return (
-      <div className="flex flex-col items-center w-full py-6 animate-in fade-in zoom-in-95 max-w-sm mx-auto">
+      <div className="flex flex-col items-center w-full py-6 animate-in fade-in zoom-in-95 max-w-sm md:max-w-4xl mx-auto">
         <div className="text-center mb-8 px-4">
-          <h2 className="text-4xl font-black text-gray-900 tracking-tighter uppercase mb-1">SIGAI-USAC</h2>
-          <p className="text-gray-400 text-[10px] font-black uppercase tracking-[0.4em]">Gestión de Instalaciones</p>
+          <h2 className="text-4xl md:text-6xl font-black text-gray-900 tracking-tighter uppercase mb-1">SIGAI-USAC</h2>
+          <p className="text-gray-400 text-[10px] md:text-sm font-black uppercase tracking-[0.4em]">Gestión de Instalaciones</p>
         </div>
         
-        <div className="grid grid-cols-2 gap-4 w-full px-2">
-          {(!currentUser || currentUser.assignedUnits?.includes('USAC')) && <UnitButton icon="🏢" label='USAC "Rojas Navarrete"' onClick={() => handleUnitClick('USAC')} full />}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full px-2">
+          {(!currentUser || currentUser.assignedUnits?.includes('USAC')) && <UnitButton icon="🏢" label='USAC "Rojas Navarrete"' onClick={() => handleUnitClick('USAC')} fullMobile />}
           {(!currentUser || currentUser.assignedUnits?.includes('CG')) && <UnitButton icon="🏛️" label="Cuartel General" onClick={() => handleUnitClick('CG')} />}
           {(!currentUser || currentUser.assignedUnits?.includes('GCG')) && <UnitButton icon="👥" label="Grupo C. General" onClick={() => handleUnitClick('GCG')} />}
           {(!currentUser || currentUser.assignedUnits?.includes('GOE3')) && <UnitButton icon="⚔️" label="GOE III" onClick={() => handleUnitClick('GOE3')} />}
@@ -635,20 +637,20 @@ const App: React.FC = () => {
           {(!currentUser || currentUser.assignedUnits?.includes('CECOM')) && <UnitButton icon="📡" label="CECOM" onClick={() => handleUnitClick('CECOM')} />}
         </div>
 
-        <div className="w-full px-2 mt-8 space-y-4">
+        <div className="w-full px-2 mt-8 grid grid-cols-1 md:grid-cols-2 gap-4">
             <button 
               onClick={() => { 
                 setAuthRole('USAC'); 
                 setAuthInitialView('login');
                 setShowAuthModal(true); 
               }}
-              className="w-full p-6 bg-white border-2 border-gray-900 text-gray-900 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-lg flex items-center justify-center gap-4 active:scale-95 transition-all"
+              className="w-full p-6 bg-white border-2 border-gray-900 text-gray-900 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-lg flex items-center justify-center gap-4 active:scale-95 transition-all md:h-full"
             >
               <UserPlus className="w-5 h-5" /> Solicitar Registro / Alta Técnico
             </button>
 
           {isAuthorized && (
-            <button onClick={() => setActiveTab(AppTab.ADMIN)} className="w-full p-6 bg-gray-900 text-yellow-400 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all">
+            <button onClick={() => setActiveTab(AppTab.ADMIN)} className="w-full p-6 bg-gray-900 text-yellow-400 rounded-[2rem] font-black uppercase tracking-widest text-[11px] shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all md:h-full">
               <ShieldCheck className="w-5 h-5" /> {isMaster ? 'Control Maestro SIGAI' : 'Panel Gestión USAC'}
             </button>
           )}
@@ -719,10 +721,10 @@ const App: React.FC = () => {
   );
 };
 
-const UnitButton: React.FC<{ icon: string, label: string, onClick: () => void, full?: boolean }> = ({ icon, label, onClick, full }) => (
+const UnitButton: React.FC<{ icon: string, label: string, onClick: () => void, fullMobile?: boolean }> = ({ icon, label, onClick, fullMobile }) => (
   <button 
     onClick={onClick} 
-    className={`${full ? 'col-span-2 aspect-auto py-8' : 'aspect-square'} flex flex-col items-center justify-center bg-white rounded-[2.5rem] p-4 shadow-xl transition-all active:scale-95 border-4 border-transparent hover:border-gray-900 group`}
+    className={`${fullMobile ? 'col-span-2 md:col-span-1 aspect-auto py-8' : 'aspect-square'} flex flex-col items-center justify-center bg-white rounded-[2.5rem] p-4 shadow-xl transition-all active:scale-95 border-4 border-transparent hover:border-gray-900 group`}
   >
     <div className="text-4xl mb-3 group-hover:scale-110 transition-transform">{icon}</div>
     <div className="font-black uppercase tracking-tighter text-[10px] text-gray-900 text-center leading-none px-2">{label}</div>

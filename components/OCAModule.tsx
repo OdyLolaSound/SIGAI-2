@@ -28,13 +28,17 @@ import {
   Wind,
   Shield,
   Activity,
-  FileDown
+  FileDown,
+  ArrowUpDown,
+  ChevronDown,
+  Copy
 } from 'lucide-react';
-import { OCACertificate, Building as BuildingType } from '../types';
+import { OCACertificate, Building as BuildingType, Provider } from '../types';
 import { storageService, BUILDINGS } from '../services/storageService';
 import { motion, AnimatePresence } from 'motion/react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ProviderAutocomplete from './ProviderAutocomplete';
 
 const OCAModule: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,9 +46,68 @@ const OCAModule: React.FC = () => {
   const [showForm, setShowForm] = useState(false);
   const [editingCert, setEditingCert] = useState<OCACertificate | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('table');
+  const [selectedCertId, setSelectedCertId] = useState<string | null>(null);
+  const [filterStatus, setFilterStatus] = useState<'all' | 'expiring' | 'caducado'>('all');
+  const [filterType, setFilterType] = useState<string>('all');
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({
+    key: 'expirationDate',
+    direction: 'asc'
+  });
+
+  // Form states for auto-fill
+  const [formMaintenanceCompany, setFormMaintenanceCompany] = useState('');
+  const [formContact, setFormContact] = useState('');
+
+  React.useEffect(() => {
+    if (showForm) {
+      if (editingCert) {
+        setFormMaintenanceCompany(editingCert.maintenanceCompany || '');
+        setFormContact(editingCert.contact || '');
+      } else {
+        setFormMaintenanceCompany('');
+        setFormContact('');
+      }
+    }
+  }, [editingCert, showForm]);
+
+  const handleSelectProvider = (p: Provider) => {
+    setFormMaintenanceCompany(p.name);
+    setFormContact(p.email || p.contactEmail || p.phone || '');
+  };
 
   const certificates = storageService.getOCACertificates();
+  const [certs, setCerts] = React.useState<OCACertificate[]>(certificates);
+
+  React.useEffect(() => {
+    const unsubscribe = storageService.subscribe(() => {
+      console.log('[DEBUG] OCAModule: Storage updated, refreshing local state');
+      setCerts([...storageService.getOCACertificates()]);
+    });
+    return unsubscribe;
+  }, []);
+
   const currentYear = new Date().getFullYear();
+
+  const types = useMemo(() => {
+    const allTypes = certs.map(c => c.type).filter(Boolean);
+    return Array.from(new Set(allTypes)) as string[];
+  }, [certs]);
+
+  const handleSort = (key: string) => {
+    setSortConfig(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const formatDate = (dateStr: string) => {
+    if (!dateStr) return '-';
+    // dateStr is expected to be YYYY-MM-DD
+    const [year, month, day] = dateStr.split('-');
+    if (!year || !month || !day) return dateStr;
+    return `${day}-${month}-${year}`;
+  };
 
   const categories = [
     'Baja Tensión', 'Alta Tensión', 'Equipos a Presión', 'Ascensores', 
@@ -70,7 +133,7 @@ const OCAModule: React.FC = () => {
   };
 
   const filteredCerts = useMemo(() => {
-    return certificates
+    return certs
       .filter(c => {
         const matchesSearch = 
           c.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -79,17 +142,26 @@ const OCAModule: React.FC = () => {
           c.installation?.toLowerCase().includes(searchTerm.toLowerCase()) ||
           c.denomination?.toLowerCase().includes(searchTerm.toLowerCase());
         const matchesCategory = filterCategory === 'all' || c.category === filterCategory;
-        return matchesSearch && matchesCategory;
+        const matchesStatus = filterStatus === 'all' || 
+                             (filterStatus === 'expiring' && new Date(c.expirationDate).getFullYear() === currentYear) ||
+                             (filterStatus === 'caducado' && c.status === 'caducado');
+        const matchesType = filterType === 'all' || c.type === filterType;
+        return matchesSearch && matchesCategory && matchesStatus && matchesType;
       })
-      .sort((a, b) => a.expirationDate.localeCompare(b.expirationDate));
-  }, [certificates, searchTerm, filterCategory]);
+      .sort((a, b) => {
+        const order = sortConfig.direction === 'asc' ? 1 : -1;
+        const valA = (a as any)[sortConfig.key] || '';
+        const valB = (b as any)[sortConfig.key] || '';
+        return valA < valB ? -order : valA > valB ? order : 0;
+      });
+  }, [certs, searchTerm, filterCategory, filterStatus, filterType, currentYear, sortConfig]);
 
   const expiringThisYear = useMemo(() => {
-    return certificates.filter(c => {
+    return certs.filter(c => {
       const expYear = new Date(c.expirationDate).getFullYear();
       return expYear === currentYear;
     });
-  }, [certificates, currentYear]);
+  }, [certs, currentYear]);
 
   const getStatusColor = (status: OCACertificate['status']) => {
     switch (status) {
@@ -102,9 +174,29 @@ const OCAModule: React.FC = () => {
   };
 
   const handleDelete = async (id: string) => {
-    if (confirm('¿Estás seguro de eliminar este registro?')) {
-      await storageService.deleteOCACertificate(id);
+    console.log('[DEBUG] handleDelete confirming for ID:', id);
+    setDeleteConfirmId(id);
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirmId) return;
+    
+    try {
+      console.log('[DEBUG] Executing deletion for ID:', deleteConfirmId);
+      await storageService.deleteOCACertificate(deleteConfirmId);
+      console.log('[DEBUG] Deletion successful');
+      setDeleteConfirmId(null);
+    } catch (e) {
+      console.error('[DEBUG] Error performing deletion:', e);
+      setDeleteConfirmId(null);
     }
+  };
+
+  const handleDuplicate = (cert: OCACertificate) => {
+    // Create a copy without the ID to force a new one on save
+    const duplicate = { ...cert, id: '' };
+    setEditingCert(duplicate);
+    setShowForm(true);
   };
 
   const handleNotify = (certs: OCACertificate[], title: string) => {
@@ -158,38 +250,44 @@ const OCAModule: React.FC = () => {
     <div className="space-y-6 pb-20">
       {/* Header & Stats */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex items-center gap-4">
-          <div className="w-12 h-12 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600">
+        <button 
+          onClick={() => setFilterStatus('all')}
+          className={`p-6 rounded-[2.5rem] border shadow-sm flex items-center gap-4 transition-all active:scale-95 text-left ${filterStatus === 'all' ? 'bg-blue-600 text-white border-blue-500 ring-4 ring-blue-100' : 'bg-white border-gray-100 text-gray-900 hover:border-blue-200'}`}
+        >
+          <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${filterStatus === 'all' ? 'bg-white/20 text-white' : 'bg-blue-50 text-blue-600'}`}>
             <ShieldCheck className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Total Revisiones</p>
-            <p className="text-2xl font-black text-gray-900">{certificates.length}</p>
+            <p className={`text-[10px] font-black uppercase tracking-widest ${filterStatus === 'all' ? 'text-blue-100' : 'text-gray-400'}`}>Total Revisiones</p>
+            <p className="text-2xl font-black">{certs.length}</p>
           </div>
-        </div>
+        </button>
 
-        <div className="bg-amber-50 p-6 rounded-[2.5rem] border border-amber-100 shadow-sm flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-2xl flex items-center justify-center text-amber-600">
+        <div className={`p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between transition-all ${filterStatus === 'expiring' ? 'bg-amber-500 text-white border-amber-400 ring-4 ring-amber-100' : 'bg-amber-50 border-amber-100 text-amber-900 hover:border-amber-200'}`}>
+          <button 
+            onClick={() => setFilterStatus('expiring')}
+            className="flex items-center gap-4 flex-1 text-left active:scale-95 transition-all"
+          >
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${filterStatus === 'expiring' ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-600'}`}>
               <Clock className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] font-black text-amber-800 uppercase tracking-widest">Expira este año</p>
-              <p className="text-2xl font-black text-amber-900">{expiringThisYear.length}</p>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${filterStatus === 'expiring' ? 'text-amber-100' : 'text-amber-800'}`}>Expira este año</p>
+              <p className="text-2xl font-black">{expiringThisYear.length}</p>
             </div>
-          </div>
+          </button>
           {expiringThisYear.length > 0 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 ml-4">
               <button 
-                onClick={() => handleDownloadPDF(expiringThisYear, `Vencimientos ${currentYear}`, `vencimientos_${currentYear}`)}
-                className="p-3 bg-white text-blue-600 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90"
+                onClick={(e) => { e.stopPropagation(); handleDownloadPDF(expiringThisYear, `Vencimientos ${currentYear}`, `vencimientos_${currentYear}`); }}
+                className={`p-3 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90 ${filterStatus === 'expiring' ? 'bg-white text-amber-600' : 'bg-white text-blue-600'}`}
                 title="Descargar PDF de Vencimientos"
               >
                 <FileDown className="w-5 h-5" />
               </button>
               <button 
-                onClick={() => handleNotify(expiringThisYear, `Vencimientos ${currentYear}`)}
-                className="p-3 bg-white text-amber-600 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90"
+                onClick={(e) => { e.stopPropagation(); handleNotify(expiringThisYear, `Vencimientos ${currentYear}`); }}
+                className={`p-3 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90 ${filterStatus === 'expiring' ? 'bg-white text-amber-800' : 'bg-white text-amber-600'}`}
                 title="Notificar Vencimientos por Email"
               >
                 <Mail className="w-5 h-5" />
@@ -198,28 +296,31 @@ const OCAModule: React.FC = () => {
           )}
         </div>
 
-        <div className="bg-red-50 p-6 rounded-[2.5rem] border border-red-100 shadow-sm flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-red-100 rounded-2xl flex items-center justify-center text-red-600">
+        <div className={`p-6 rounded-[2.5rem] border shadow-sm flex items-center justify-between transition-all ${filterStatus === 'caducado' ? 'bg-red-600 text-white border-red-500 ring-4 ring-red-100' : 'bg-red-50 border-red-100 text-red-900 hover:border-red-200'}`}>
+          <button 
+            onClick={() => setFilterStatus('caducado')}
+            className="flex items-center gap-4 flex-1 text-left active:scale-95 transition-all"
+          >
+            <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${filterStatus === 'caducado' ? 'bg-white/20 text-white' : 'bg-red-100 text-red-600'}`}>
               <AlertTriangle className="w-6 h-6" />
             </div>
             <div>
-              <p className="text-[10px] font-black text-red-800 uppercase tracking-widest">Caducados</p>
-              <p className="text-2xl font-black text-red-900">{certificates.filter(c => c.status === 'caducado').length}</p>
+              <p className={`text-[10px] font-black uppercase tracking-widest ${filterStatus === 'caducado' ? 'text-red-100' : 'text-red-800'}`}>Caducados</p>
+              <p className="text-2xl font-black">{certificates.filter(c => c.status === 'caducado').length}</p>
             </div>
-          </div>
+          </button>
           {certificates.filter(c => c.status === 'caducado').length > 0 && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 ml-4">
               <button 
-                onClick={() => handleDownloadPDF(certificates.filter(c => c.status === 'caducado'), 'Revisiones Caducadas', 'revisiones_caducadas')}
-                className="p-3 bg-white text-red-600 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90"
+                onClick={(e) => { e.stopPropagation(); handleDownloadPDF(certificates.filter(c => c.status === 'caducado'), 'Revisiones Caducadas', 'revisiones_caducadas'); }}
+                className={`p-3 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90 ${filterStatus === 'caducado' ? 'bg-white text-red-600' : 'bg-white text-red-600'}`}
                 title="Descargar PDF de Caducados"
               >
                 <FileDown className="w-5 h-5" />
               </button>
               <button 
-                onClick={() => handleNotify(certificates.filter(c => c.status === 'caducado'), 'Revisiones Caducadas')}
-                className="p-3 bg-white text-red-600 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90"
+                onClick={(e) => { e.stopPropagation(); handleNotify(certificates.filter(c => c.status === 'caducado'), 'Revisiones Caducadas'); }}
+                className={`p-3 rounded-xl shadow-sm hover:shadow-md transition-all active:scale-90 ${filterStatus === 'caducado' ? 'bg-white text-red-800' : 'bg-white text-red-600'}`}
                 title="Notificar Caducados por Email"
               >
                 <Mail className="w-5 h-5" />
@@ -268,6 +369,16 @@ const OCAModule: React.FC = () => {
               <option key={cat} value={cat}>{cat}</option>
             ))}
           </select>
+          <select 
+            value={filterType}
+            onChange={(e) => setFilterType(e.target.value)}
+            className="flex-1 md:flex-none px-4 py-3 bg-gray-50 rounded-xl text-[10px] font-black uppercase tracking-widest outline-none border-none"
+          >
+            <option value="all">Todos los Tipos</option>
+            {types.map(t => (
+              <option key={t} value={t}>{t}</option>
+            ))}
+          </select>
           <button 
             onClick={() => { setEditingCert(null); setShowForm(true); }}
             className="px-6 py-3 bg-gray-900 text-white rounded-xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2 hover:bg-black transition-all active:scale-95"
@@ -313,7 +424,7 @@ const OCAModule: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-1.5 text-gray-400">
                         <Calendar className="w-3.5 h-3.5" />
-                        <span className="text-[10px] font-bold uppercase">Exp: {cert.expirationDate}</span>
+                        <span className="text-[10px] font-bold uppercase">Exp: {formatDate(cert.expirationDate)}</span>
                       </div>
                       <div className="flex items-center gap-1.5 text-gray-400">
                         <Info className="w-3.5 h-3.5" />
@@ -329,16 +440,25 @@ const OCAModule: React.FC = () => {
                 <div className="mt-6 pt-4 border-t border-gray-50 flex items-center justify-between">
                   <div className="flex gap-2">
                     <button 
-                      onClick={() => { setEditingCert(cert); setShowForm(true); }}
+                      onClick={(e) => { e.stopPropagation(); setEditingCert(cert); setShowForm(true); }}
                       className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                      title="Editar"
                     >
                       <Plus className="w-4 h-4 rotate-45" />
+                    </button>
+                    <button 
+                      onClick={(e) => { e.stopPropagation(); handleDuplicate(cert); }}
+                      className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-all"
+                      title="Duplicar"
+                    >
+                      <Copy className="w-4 h-4" />
                     </button>
                     {cert.documentUrl && (
                       <a 
                         href={cert.documentUrl}
                         target="_blank"
                         rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
                         className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-all"
                         title="Descargar PDF"
                       >
@@ -346,7 +466,11 @@ const OCAModule: React.FC = () => {
                       </a>
                     )}
                     <button 
-                      onClick={() => handleDelete(cert.id)}
+                      onClick={(e) => { 
+                        console.log('[DEBUG] Card: Trash button clicked for ID:', cert.id);
+                        e.stopPropagation(); 
+                        handleDelete(cert.id); 
+                      }}
                       className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                     >
                       <Trash2 className="w-4 h-4" />
@@ -365,23 +489,66 @@ const OCAModule: React.FC = () => {
             ))}
           </div>
         ) : (
-          <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-x-auto max-h-[70vh] overflow-y-auto relative scrollbar-hide">
+            <table className="w-full text-left border-separate border-spacing-0">
               <thead>
-                <tr className="bg-gray-50/50 border-bottom border-gray-100">
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Edificio</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Instalación / Denominación</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Categoría</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Tipo</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Última Fecha</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Próxima Fecha</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Estado</th>
-                  <th className="px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest">Acciones</th>
+                <tr className="sticky top-0 z-10">
+                  <th 
+                    onClick={() => handleSort('buildingId')}
+                    className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 first:rounded-tl-[2rem] cursor-pointer hover:text-blue-600 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      Edificio {sortConfig.key === 'buildingId' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('installation')}
+                    className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      Instalación / Denominación {sortConfig.key === 'installation' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
+                  <th className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Categoría</th>
+                  <th 
+                    onClick={() => handleSort('type')}
+                    className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      Tipo {sortConfig.key === 'type' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('lastInspectionDate')}
+                    className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      Última Fecha {sortConfig.key === 'lastInspectionDate' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
+                  <th 
+                    onClick={() => handleSort('expirationDate')}
+                    className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 cursor-pointer hover:text-blue-600 transition-colors"
+                  >
+                    <div className="flex items-center gap-2">
+                      Próxima Fecha {sortConfig.key === 'expirationDate' && <ArrowUpDown className="w-3 h-3" />}
+                    </div>
+                  </th>
+                  <th className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">Estado</th>
+                  <th className="sticky top-0 bg-gray-50 px-6 py-4 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100 last:rounded-tr-[2rem]">Acciones</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {filteredCerts.map(cert => (
-                  <tr key={cert.id} className="hover:bg-gray-50/50 transition-colors group">
+                  <tr 
+                    key={cert.id} 
+                    onClick={() => setSelectedCertId(selectedCertId === cert.id ? null : cert.id)}
+                    className={`cursor-pointer transition-all ${
+                      selectedCertId === cert.id 
+                        ? 'bg-blue-50/80 shadow-inner' 
+                        : 'hover:bg-gray-50/50'
+                    } group`}
+                  >
                     <td className="px-6 py-4">
                       <div className="flex flex-col">
                         <span className="text-xs font-black text-gray-900">{cert.buildingId}</span>
@@ -408,14 +575,14 @@ const OCAModule: React.FC = () => {
                       </span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="text-xs font-mono text-gray-600">{cert.lastInspectionDate}</span>
+                      <span className="text-xs font-mono text-gray-600">{formatDate(cert.lastInspectionDate)}</span>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`text-xs font-mono font-bold ${
                         cert.status === 'caducado' ? 'text-red-600' : 
                         cert.status === 'expirando' ? 'text-amber-600' : 'text-gray-900'
                       }`}>
-                        {cert.expirationDate}
+                        {formatDate(cert.expirationDate)}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -426,16 +593,25 @@ const OCAModule: React.FC = () => {
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
-                          onClick={() => { setEditingCert(cert); setShowForm(true); }}
+                          onClick={(e) => { e.stopPropagation(); setEditingCert(cert); setShowForm(true); }}
                           className="p-2 text-gray-400 hover:text-blue-500 hover:bg-blue-50 rounded-lg transition-all"
+                          title="Editar"
                         >
                           <Plus className="w-4 h-4 rotate-45" />
+                        </button>
+                        <button 
+                          onClick={(e) => { e.stopPropagation(); handleDuplicate(cert); }}
+                          className="p-2 text-gray-400 hover:text-amber-500 hover:bg-amber-50 rounded-lg transition-all"
+                          title="Duplicar"
+                        >
+                          <Copy className="w-4 h-4" />
                         </button>
                         {cert.documentUrl && (
                           <a 
                             href={cert.documentUrl}
                             target="_blank"
                             rel="noopener noreferrer"
+                            onClick={(e) => e.stopPropagation()}
                             className="p-2 text-gray-400 hover:text-green-500 hover:bg-green-50 rounded-lg transition-all"
                             title="Descargar PDF"
                           >
@@ -443,7 +619,11 @@ const OCAModule: React.FC = () => {
                           </a>
                         )}
                         <button 
-                          onClick={() => handleDelete(cert.id)}
+                          onClick={(e) => { 
+                            console.log('[DEBUG] Table: Trash button clicked for ID:', cert.id);
+                            e.stopPropagation(); 
+                            handleDelete(cert.id); 
+                          }}
                           className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -460,6 +640,48 @@ const OCAModule: React.FC = () => {
 
       {/* Form Modal */}
       <AnimatePresence>
+        {deleteConfirmId && (
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setDeleteConfirmId(null)}
+              className="absolute inset-0 bg-gray-900/40 backdrop-blur-sm"
+            />
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="relative w-full max-w-md bg-white rounded-3xl shadow-2xl overflow-hidden border border-gray-100"
+            >
+              <div className="p-8 text-center">
+                <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                  <Trash2 className="w-8 h-8 text-red-600" />
+                </div>
+                <h3 className="text-xl font-black text-gray-900 mb-2">¿Eliminar registro?</h3>
+                <p className="text-gray-500 font-medium mb-8">
+                  Esta acción no se puede deshacer. El certificado OCA y sus tareas asociadas serán eliminados permanentemente.
+                </p>
+                <div className="flex gap-4">
+                  <button 
+                    onClick={() => setDeleteConfirmId(null)}
+                    className="flex-1 py-4 bg-gray-100 text-gray-500 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-gray-200 transition-all"
+                  >
+                    Cancelar
+                  </button>
+                  <button 
+                    onClick={confirmDelete}
+                    className="flex-1 py-4 bg-red-600 text-white rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-red-700 transition-all shadow-lg shadow-red-600/20"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {showForm && (
           <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
             <motion.div 
@@ -478,7 +700,7 @@ const OCAModule: React.FC = () => {
               <div className="p-8 bg-gray-900 text-white flex justify-between items-center">
                 <div>
                   <h3 className="text-xl font-black uppercase tracking-tighter">
-                    {editingCert ? 'Editar Registro' : 'Nueva Revisión Periódica'}
+                    {editingCert?.id ? 'Editar Registro' : editingCert ? 'Duplicar Registro' : 'Nueva Revisión Periódica'}
                   </h3>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Gestión de Mantenimiento Legal e Inspecciones</p>
                 </div>
@@ -708,18 +930,20 @@ const OCAModule: React.FC = () => {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                       <div>
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block px-2">Empresa Mantenedora / OCA</label>
-                        <input 
-                          name="maintenanceCompany"
-                          defaultValue={editingCert?.maintenanceCompany}
-                          placeholder="Ej: TÉRMICAS, SGS, GENIMANT..."
-                          className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none focus:ring-2 ring-blue-500/20 transition-all"
+                        <ProviderAutocomplete 
+                          value={formMaintenanceCompany}
+                          onChange={setFormMaintenanceCompany}
+                          onSelectProvider={handleSelectProvider}
+                          placeholder="Ej: TÉRMICAS, SGS..."
                         />
+                        <input type="hidden" name="maintenanceCompany" value={formMaintenanceCompany} />
                       </div>
                       <div>
                         <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2 block px-2">Contacto / Email</label>
                         <input 
                           name="contact"
-                          defaultValue={editingCert?.contact}
+                          value={formContact}
+                          onChange={(e) => setFormContact(e.target.value)}
                           placeholder="Ej: contacto@empresa.com"
                           className="w-full px-6 py-4 bg-gray-50 rounded-2xl text-sm font-bold outline-none focus:ring-2 ring-blue-500/20 transition-all"
                         />

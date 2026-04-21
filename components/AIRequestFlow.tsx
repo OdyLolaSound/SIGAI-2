@@ -1,12 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
-import { MessageSquare, Camera, Upload, Send, Loader2, CheckCircle2, AlertCircle, ChevronRight, X, ShieldAlert, Wrench, ArrowLeft, Bot, User as UserIcon, MapPin, Building2, Navigation, Maximize2, Minimize2, FileText } from 'lucide-react';
+import { MessageSquare, Camera, Upload, Send, Loader2, CheckCircle2, AlertCircle, ChevronRight, X, ShieldAlert, Wrench, ArrowLeft, Bot, User as UserIcon, MapPin, Building2, Navigation, Maximize2, Minimize2, FileText, Mail, MessageCircle } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
 import Markdown from 'react-markdown';
 import { MapContainer, TileLayer, Marker, useMapEvents, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { User, RequestCategory, UrgencyLevel, RequestItem, Building } from '../types';
 import { storageService, BUILDINGS } from '../services/storageService';
+import { compressImage } from '../lib/imageUtils';
 
 interface AIRequestFlowProps {
   user: User;
@@ -14,7 +15,7 @@ interface AIRequestFlowProps {
   onComplete: () => void;
 }
 
-type FlowStep = 'INPUT' | 'ANALYZING' | 'AI_SUGGESTION' | 'IMAGES' | 'LOCATION' | 'FINAL_CONFIRM';
+type FlowStep = 'INPUT' | 'ANALYZING' | 'AI_SUGGESTION' | 'IMAGES' | 'LOCATION' | 'FINAL_CONFIRM' | 'SUCCESS';
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -52,6 +53,7 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
   const [specificLocation, setSpecificLocation] = useState('');
   const [isMapExpanded, setIsMapExpanded] = useState(false);
   const [buildingSearch, setBuildingSearch] = useState('');
+  const [createdRequest, setCreatedRequest] = useState<RequestItem | null>(null);
 
   // Leaflet Marker Icon Fix
   const customIcon = L.icon({
@@ -118,8 +120,14 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
     if (files) {
       Array.from(files).forEach(file => {
         const reader = new FileReader();
-        reader.onloadend = () => {
-          setImages(prev => [...prev, reader.result as string]);
+        reader.onloadend = async () => {
+          try {
+            const result = await compressImage(reader.result as string, 1200, 1200, 0.7);
+            setImages(prev => [...prev, result]);
+          } catch (err) {
+            console.error("Compression error:", err);
+            setImages(prev => [...prev, reader.result as string]);
+          }
         };
         reader.readAsDataURL(file);
       });
@@ -187,12 +195,22 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const result = reader.result as string;
-        if (isDocumentMode) {
-          setDocumentImage(result);
-        } else {
-          setImages(prev => [...prev, result]);
+        try {
+          const compressed = await compressImage(result, isDocumentMode ? 1600 : 1200, isDocumentMode ? 1600 : 1200, 0.8);
+          if (isDocumentMode) {
+            setDocumentImage(compressed);
+          } else {
+            setImages(prev => [...prev, compressed]);
+          }
+        } catch (err) {
+          console.error("Compression error:", err);
+          if (isDocumentMode) {
+            setDocumentImage(result);
+          } else {
+            setImages(prev => [...prev, result]);
+          }
         }
       };
       reader.readAsDataURL(file);
@@ -337,6 +355,8 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
   };
 
   const createFormalRequest = (resolvedByAi: boolean = false) => {
+    const regNumber = storageService.getNextRegistrationNumber();
+
     const newItem: RequestItem = {
       id: crypto.randomUUID(),
       userId: user.id,
@@ -353,6 +373,7 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
       aiSteps: aiAnalysis?.steps || undefined,
       isChronic: aiAnalysis?.isChronic ?? false,
       structuralSolution: aiAnalysis?.structuralSolution || undefined,
+      registrationNumber: regNumber,
       locationData: {
         buildingId: selectedBuilding?.id || undefined,
         buildingName: selectedBuilding?.name || undefined,
@@ -362,7 +383,8 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
     };
 
     storageService.saveRequest(newItem);
-    onComplete();
+    setCreatedRequest(newItem);
+    setStep('SUCCESS');
   };
 
   return (
@@ -1045,6 +1067,65 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
                   className="w-full p-4 text-gray-400 font-black uppercase text-[10px] tracking-widest flex items-center justify-center gap-2"
                 >
                   <ArrowLeft className="w-4 h-4" /> Corregir Ubicación
+                </button>
+              </div>
+            </div>
+          )}
+
+          {step === 'SUCCESS' && createdRequest && (
+            <div className="space-y-8 animate-in zoom-in-95 duration-500 py-10">
+              <div className="text-center">
+                <div className="w-24 h-24 bg-green-50 text-green-500 rounded-[3rem] flex items-center justify-center mx-auto mb-6 shadow-xl border border-green-100 relative overflow-hidden">
+                   <div className="absolute inset-0 bg-green-500/10 animate-ping opacity-20"></div>
+                   <CheckCircle2 className="w-12 h-12 relative z-10" />
+                </div>
+                <h3 className="text-gray-900 text-3xl font-black uppercase tracking-tight">Petición Registrada</h3>
+                <p className="text-gray-400 text-[10px] font-black uppercase tracking-widest mt-2 px-10">Tu solicitud ha sido enviada al sistema central de USAC con éxito</p>
+              </div>
+
+              <div className="bg-white border-2 border-dashed border-gray-100 rounded-[3rem] p-6 text-center space-y-3 shadow-sm px-4">
+                <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest block">Número de Seguimiento</span>
+                <div className="text-2xl font-black text-gray-900 font-mono tabular-nums break-all">
+                  {createdRequest.registrationNumber}
+                </div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Guarda este número para futuras consultas</p>
+              </div>
+
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <button 
+                    onClick={() => {
+                      const text = `Hola, he registrado una nueva petición en SIGAI-USAC. \n\n📋 *Seguimiento:* ${createdRequest.registrationNumber}\n📍 *Ubicación:* ${createdRequest.locationData?.buildingName || 'No especificada'}\n⚠️ *Incidencia:* ${createdRequest.title}`;
+                      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
+                    }}
+                    className="flex flex-col items-center gap-3 p-6 bg-[#25D366]/10 text-[#075E54] rounded-[2.5rem] border border-[#25D366]/20 active:scale-95 transition-all hover:bg-[#25D366]/20"
+                  >
+                    <div className="w-10 h-10 bg-[#25D366] text-white rounded-full flex items-center justify-center">
+                      <MessageCircle className="w-5 h-5 fill-current" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest">WhatsApp</span>
+                  </button>
+
+                  <button 
+                    onClick={() => {
+                      const subject = encodeURIComponent(`Petición SIGAI-USAC: ${createdRequest.registrationNumber}`);
+                      const body = encodeURIComponent(`He registrado una nueva petición en el sistema SIGAI-USAC.\n\nNúmero de Seguimiento: ${createdRequest.registrationNumber}\nUbicación: ${createdRequest.locationData?.buildingName || 'No especificada'}\nIncidencia: ${createdRequest.description}`);
+                      window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+                    }}
+                    className="flex flex-col items-center gap-3 p-6 bg-blue-50 text-blue-600 rounded-[2.5rem] border border-blue-200 active:scale-95 transition-all hover:bg-blue-100"
+                  >
+                    <div className="w-10 h-10 bg-blue-600 text-white rounded-full flex items-center justify-center">
+                      <Mail className="w-5 h-5" />
+                    </div>
+                    <span className="text-[9px] font-black uppercase tracking-widest">Correo</span>
+                  </button>
+                </div>
+
+                <button 
+                  onClick={onComplete}
+                  className="w-full p-7 bg-gray-900 text-white rounded-[2.5rem] font-black uppercase text-xs tracking-widest shadow-2xl active:scale-95 transition-all"
+                >
+                  Finalizar y Volver
                 </button>
               </div>
             </div>

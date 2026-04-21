@@ -49,6 +49,9 @@ let cache: any = {
   rti_reports: []
 };
 
+// UI Listeners to trigger re-renders
+let uiListeners: (() => void)[] = [];
+
 // Helper to remove undefined values before saving to Firestore
 export const cleanData = (data: any) => {
   if (!data || typeof data !== 'object') return data;
@@ -84,9 +87,9 @@ function setupListener(collectionName: string, cacheKey: string, customQuery?: a
     if (cacheKey === 'ppts') {
       storageService.checkContractExpirations();
     }
-    if (cacheKey === 'ppt_executions') {
-      console.log(`[DEBUG] PPT Executions updated: ${data.length} items`);
-    }
+    
+    // Notify UI listeners
+    uiListeners.forEach(l => l());
   }, (error) => {
     // Only log if it's not a permission error during logout/login transition
     const msg = error.message.toLowerCase();
@@ -1300,8 +1303,8 @@ export const storageService = {
   findProvider: (criteria: { name?: string, email?: string, phone?: string, cif?: string }): Provider | null => {
     return cache.providers.find((p: any) => {
       if (criteria.name && p.name === criteria.name) return true;
-      if (criteria.email && p.email === criteria.email) return true;
-      if (criteria.phone && p.phone === criteria.phone) return true;
+      if (criteria.email && (p.email === criteria.email || p.contactEmail === criteria.email)) return true;
+      if (criteria.phone && (p.phone === criteria.phone || p.contactPhone === criteria.phone)) return true;
       if (criteria.cif && p.cif === criteria.cif) return true;
       return false;
     }) || null;
@@ -1465,6 +1468,7 @@ export const storageService = {
     
     if (!certs.length) return;
 
+    // Sync existing tasks: create missing ones and potentially update
     for (const cert of certs) {
       const taskId = `oca_task_${cert.id}`;
       const existingTask = tasks.find(t => t.id === taskId);
@@ -1492,6 +1496,21 @@ export const storageService = {
           await setDoc(doc(db, 'tasks', taskId), cleanData(newTask));
         } catch (e) {
           console.error(`[DEBUG] Error syncing OCA task ${taskId}:`, e);
+        }
+      }
+    }
+
+    // Cleanup: Delete tasks belonging to deleted certificates
+    const ocaTasks = tasks.filter(t => t.id.startsWith('oca_task_'));
+    for (const task of ocaTasks) {
+      const certId = task.id.replace('oca_task_', '');
+      const exists = certs.some(c => c.id === certId);
+      if (!exists) {
+        try {
+          console.log(`[DEBUG] Cleaning up orphaned OCA task: ${task.id}`);
+          await deleteDoc(doc(db, 'tasks', task.id));
+        } catch (e) {
+          console.error(`[DEBUG] Error deleting orphaned task ${task.id}:`, e);
         }
       }
     }
@@ -1548,5 +1567,11 @@ export const storageService = {
     } catch (e) {
       handleFirestoreError(e, OperationType.DELETE, 'rti_works');
     }
+  },
+  subscribe: (listener: () => void) => {
+    uiListeners.push(listener);
+    return () => {
+      uiListeners = uiListeners.filter(l => l !== listener);
+    };
   }
 };

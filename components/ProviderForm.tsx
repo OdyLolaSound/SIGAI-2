@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { Provider, MaterialCategory, ProviderDocument } from '../types';
 import { storageService } from '../services/storageService';
+import { compressImage } from '../lib/imageUtils';
 import { extractProviderInfo } from '../services/geminiService';
 
 interface ProviderFormProps {
@@ -54,21 +55,28 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ onClose, onSave, initialDat
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64 = event.target?.result as string;
-      const info = await extractProviderInfo(base64);
-      if (info) {
-        setFormData(prev => ({
-          ...prev,
-          name: info.name || prev.name,
-          cif: info.cif || prev.cif,
-          phone: info.phone || prev.phone,
-          email: info.email || prev.email,
-          categories: info.categories.length > 0 ? info.categories : prev.categories,
-          address: info.address || prev.address,
-          web: info.website || prev.web
-        }));
-        checkDuplicate(info.name, info.email, info.phone, info.cif);
+      try {
+        // Compress for OCR processing
+        const compressed = await compressImage(base64, 1600, 1600, 0.8);
+        const info = await extractProviderInfo(compressed);
+        if (info) {
+          setFormData(prev => ({
+            ...prev,
+            name: info.name || prev.name,
+            cif: info.cif || prev.cif,
+            phone: info.phone || prev.phone,
+            email: info.email || prev.email,
+            categories: info.categories.length > 0 ? info.categories : prev.categories,
+            address: info.address || prev.address,
+            web: info.website || prev.web
+          }));
+          checkDuplicate(info.name, info.email, info.phone, info.cif);
+        }
+      } catch (err) {
+        console.error("Scan error:", err);
+      } finally {
+        setScanning(false);
       }
-      setScanning(false);
     };
     reader.readAsDataURL(file);
   };
@@ -89,13 +97,23 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ onClose, onSave, initialDat
     setUploadingDoc(true);
     const reader = new FileReader();
     reader.onload = async (event) => {
-      const base64 = event.target?.result as string;
+      let content = event.target?.result as string;
+      
+      // If it's an image, compress it to stay under 1MB limit
+      if (file.type.startsWith('image/')) {
+        try {
+          content = await compressImage(content, 1200, 1200, 0.7);
+        } catch (err) {
+          console.error("Doc compression error:", err);
+        }
+      }
+
       const newDoc: ProviderDocument = {
         id: crypto.randomUUID(),
         name: file.name,
         type: 'Presupuesto',
         date: new Date().toISOString(),
-        content: base64,
+        content: content,
         fileType: file.type
       };
       setFormData(prev => ({
@@ -218,17 +236,36 @@ const ProviderForm: React.FC<ProviderFormProps> = ({ onClose, onSave, initialDat
           {duplicate && (
             <div className="bg-blue-50 border-2 border-blue-100 rounded-3xl p-6 flex gap-4 animate-in slide-in-from-top-2">
               <ShieldCheck className="w-8 h-8 text-blue-500 shrink-0" />
-              <div>
+              <div className="flex-1">
                 <h5 className="text-[10px] font-black text-blue-900 uppercase tracking-widest mb-1">Proveedor Existente Detectado</h5>
                 <p className="text-[10px] font-bold text-blue-700/70 leading-relaxed uppercase">
-                  Hemos encontrado a "{duplicate.name}" en la base de datos. Los cambios actualizarán su ficha actual.
+                  Hemos encontrado a "{duplicate.name}" en la base de datos.
                 </p>
-                <button 
-                  onClick={() => setDuplicate(null)}
-                  className="mt-3 text-[8px] font-black text-blue-500 uppercase tracking-widest hover:underline"
-                >
-                  Crear como nuevo de todos modos
-                </button>
+                <div className="flex gap-3 mt-3">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setFormData({
+                        ...formData,
+                        ...duplicate,
+                        id: duplicate.id // ensure we keep the duplicate ID for updating
+                      });
+                    }}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-xl text-[8px] font-black uppercase tracking-widest shadow-lg hover:bg-blue-700 transition-all"
+                  >
+                    Cargar datos existentes
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setDuplicate(null);
+                      setFormData(prev => ({ ...prev, id: undefined }));
+                    }}
+                    className="px-4 py-2 bg-white text-blue-500 border border-blue-200 rounded-xl text-[8px] font-black uppercase tracking-widest hover:bg-blue-50 transition-all"
+                  >
+                    Nuevo (Ignorar)
+                  </button>
+                </div>
               </div>
             </div>
           )}

@@ -114,6 +114,49 @@
         "budgetAmount": { "type": "number" }
       },
       "required": ["id", "title", "category", "buildingId", "lastInspectionDate", "expirationDate", "status"]
+    },
+    "RTIWork": {
+      "title": "RTI Work",
+      "description": "Infrastructure work from the technical review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "location": { "type": "string" },
+        "description": { "type": "string" },
+        "proposedYears": { "type": "array", "items": { "type": "string" } },
+        "estimatedCost": { "type": "number" },
+        "priority": { "type": "string" },
+        "risk": { "type": "string" },
+        "status": { "type": "string" },
+        "unitId": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "location", "description", "status", "unitId"]
+    },
+    "RTIReport": {
+      "title": "RTI Report",
+      "description": "Biennial infrastructure technical report",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "inspectionDate": { "type": "string" },
+        "nextInspectionDate": { "type": "string" },
+        "status": { "type": "string" }
+      },
+      "required": ["id", "inspectionDate", "nextInspectionDate", "status"]
+    },
+    "PPTExecution": {
+      "title": "PPT Execution",
+      "description": "Record of a physical visit for maintenance tasks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "pptId": { "type": "string" },
+        "visitDate": { "type": "string" },
+        "performedBy": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "pptId", "visitDate", "performedBy"]
     }
   },
   "firestore": {
@@ -159,6 +202,18 @@
     "electrical_designs": {
       "schema": "ElectricalDesign",
       "description": "Collection of saved electrical panel designs"
+    },
+    "rti_works": {
+      "schema": "RTIWork",
+      "description": "Infrastructure works and technical inspections"
+    },
+    "rti_reports": {
+      "schema": "RTIReport",
+      "description": "Biennial technical infrastructure reports"
+    },
+    "ppt_executions": {
+      "schema": "PPTExecution",
+      "description": "Record of maintenance task executions for a PPT"
     }
   }
 }

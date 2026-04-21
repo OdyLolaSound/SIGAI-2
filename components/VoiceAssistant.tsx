@@ -82,7 +82,11 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
 
       recognitionRef.current.onerror = (event: any) => {
         console.error('Speech recognition error', event.error);
-        setError('Error al escuchar. Por favor, inténtalo de nuevo.');
+        if (event.error === 'not-allowed') {
+          setError('Permiso de micrófono denegado. Por favor, actívalo en la configuración de tu navegador.');
+        } else {
+          setError('Error al escuchar. Por favor, inténtalo de nuevo.');
+        }
         setIsListening(false);
       };
     } else {
@@ -136,7 +140,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
         contents: `El usuario ha dicho: "${text}". Hoy es ${new Date().toLocaleDateString('es-ES')}.
         Tu tarea es analizar la intención del usuario y devolver un JSON estructurado.
         
-        Pestañas: home, history, settings, ai_request, ai_material, usac_manager, calendar, team, gasoil, boilers, salt, temperatures, maintenance, water_sync, tools, oca, ppts, blueprints, rti.
+        Pestañas: home, history, settings, ai_request, ai_material, usac_manager, calendar (Agenda/Calendario de tareas), team, gasoil, boilers, salt, temperatures, maintenance, water_sync, tools, oca, ppts, blueprints, rti, providers (Agenda de Contactos/Proveedores).
         Edificios disponibles: ${buildingsList}
         Servicios: luz, agua, caldera, gasoil, sal.
 
@@ -144,14 +148,22 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
         {
           "type": "NAVIGATE" | "CREATE_TASK" | "SEARCH_PROVIDER" | "GET_STATUS" | "ADD_READING" | "CHECK_TEAM" | "CHECK_ALERTS" | "UNKNOWN",
           "tab": "nombre_pestaña",
-          "task": { "title": "título", "description": "desc", "startDate": "YYYY-MM-DD", "priority": "Baja"|"Media"|"Alta"|"Crítica" },
+          "task": { 
+            "title": "título", 
+            "description": "desc", 
+            "startDate": "YYYY-MM-DD (usa ${new Date().toISOString().split('T')[0]} por defecto si no se menciona fecha)", 
+            "priority": "Baja"|"Media"|"Alta"|"Crítica" 
+          },
           "providerQuery": "nombre",
           "statusQuery": { "service": "luz"|"agua"|"caldera"|"gasoil"|"sal", "buildingId": "ID_EDIFICIO" },
           "reading": { "service": "luz"|"agua", "value": 123.45, "buildingId": "ID_EDIFICIO" },
           "message": "mensaje para el usuario"
         }
 
-        Responde ÚNICAMENTE con el objeto JSON.`,
+        Instrucciones adicionales:
+        - Si el usuario dice "apuntar", "agendar" o "añadir a la agenda" sin especificar "proveedores", usa CREATE_TASK.
+        - Si el usuario busca una empresa o contacto, usa SEARCH_PROVIDER.
+        - Sé conciso en el "message".`,
         config: {
           temperature: 0.1,
           responseMimeType: "application/json",
@@ -167,7 +179,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
                   description: { type: Type.STRING },
                   startDate: { type: Type.STRING },
                   priority: { type: Type.STRING, enum: ["Baja", "Media", "Alta", "Crítica"] }
-                }
+                },
+                required: ["title", "startDate", "priority"]
               },
               providerQuery: { type: Type.STRING },
               statusQuery: {
@@ -187,54 +200,66 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
               },
               message: { type: Type.STRING }
             },
-            required: ["type"]
+            required: ["type", "message"]
           }
         }
       });
 
       const result = JSON.parse(response.text) as VoiceActionResult;
-      console.log('Voice Action Result:', result);
+      console.log('[DEBUG] Voice Assistant AI Result:', result);
 
       switch (result.type) {
         case 'NAVIGATE':
+          console.log('[DEBUG] Navigation requested to tab:', result.tab);
           if (result.tab && Object.values(AppTab).includes(result.tab as AppTab)) {
+            console.log('[DEBUG] Tab valid. Executing navigation to:', result.tab);
             onNavigate(result.tab as AppTab);
             setSuccessMessage(result.message || `Navegando a ${result.tab}...`);
             setTimeout(onClose, 1500);
           } else {
             setError('No he encontrado esa sección.');
+            console.error('[DEBUG] Invalid tab or tab not provided:', result.tab);
           }
           break;
 
         case 'CREATE_TASK':
-          if (result.task && user) {
-            // Similarity Check for Voice Tasks
-            const allTasks = storageService.getTasks();
-            const normalizedTitle = result.task.title.toLowerCase().trim();
-            const similar = allTasks.find(t => {
-              const tTitle = t.title.toLowerCase().trim();
-              return (tTitle === normalizedTitle || tTitle.includes(normalizedTitle) || normalizedTitle.includes(tTitle)) 
-                     && t.checklist && t.checklist.length > 0;
-            });
+          console.log('[DEBUG] Task creation logic triggered:', result.task);
+          if (result.task && result.task.title && user) {
+            try {
+              // Similarity Check for Voice Tasks (to import checklists)
+              const allTasks = storageService.getTasks();
+              const normalizedTitle = result.task.title.toLowerCase().trim();
+              const similar = allTasks.find(t => {
+                const tTitle = t.title.toLowerCase().trim();
+                return (tTitle === normalizedTitle || tTitle.includes(normalizedTitle) || normalizedTitle.includes(tTitle)) 
+                       && t.checklist && t.checklist.length > 0;
+              });
 
-            const newTask: CalendarTask = {
-              id: crypto.randomUUID(),
-              title: result.task.title,
-              description: result.task.description,
-              type: 'Tarea de Voz',
-              startDate: result.task.startDate,
-              priority: result.task.priority as any,
-              status: 'Pendiente',
-              assignedTo: [user.id],
-              createdBy: user.id,
-              createdAt: new Date().toISOString(),
-              checklist: similar ? similar.checklist.map(item => ({ ...item, id: crypto.randomUUID(), completed: false })) : []
-            };
-            await storageService.saveTask(newTask);
-            setSuccessMessage(`Tarea creada: "${result.task.title}" para el ${result.task.startDate}${similar ? ' (con procedimiento importado)' : ''}`);
-            setTimeout(onClose, 2500);
+              const newTask: CalendarTask = {
+                id: crypto.randomUUID(),
+                title: result.task.title,
+                description: result.task.description || '',
+                type: 'Tarea de Voz',
+                startDate: result.task.startDate || new Date().toISOString().split('T')[0],
+                priority: (result.task.priority as any) || 'Media',
+                status: 'Pendiente',
+                assignedTo: [user.id],
+                createdBy: user.id,
+                createdAt: new Date().toISOString(),
+                checklist: similar ? similar.checklist.map(item => ({ ...item, id: crypto.randomUUID(), completed: false })) : []
+              };
+              
+              console.log('[DEBUG] Final task object to save:', newTask);
+              await storageService.saveTask(newTask);
+              setSuccessMessage(result.message || `Tarea agendada: "${result.task.title}"`);
+              setTimeout(onClose, 2500);
+            } catch (err) {
+              console.error('[DEBUG] Database error creating task:', err);
+              setError('Error al guardar en la agenda. Intente de nuevo.');
+            }
           } else {
-            setError('Faltan datos para crear la tarea.');
+            console.error('[DEBUG] Task creation failed - insufficient data:', result.task);
+            setError(result.message || 'No he podido extraer los detalles de la tarea.');
           }
           break;
 

@@ -1,9 +1,10 @@
 
 import React, { useState, useEffect, useMemo } from 'react';
 import { Wrench, Plus, X, Search, LayoutGrid, Info, ArrowLeft, Package, Trash2, ShieldCheck, Clock, Settings, History, Calendar, HardHat, Hammer, Box } from 'lucide-react';
-import { Boiler, User, BoilerMaintenanceRecord, BoilerPart, BoilerStatus, AppTab } from '../types';
+import { Boiler, User, BoilerMaintenanceRecord, BoilerPart, BoilerStatus, AppTab, Provider } from '../types';
 import { storageService, PIEZAS_COMUNES } from '../services/storageService';
 import { getLocalDateString } from '../services/dateUtils';
+import ProviderAutocomplete from './ProviderAutocomplete';
 
 interface MaintenanceModuleProps {
   user: User;
@@ -213,6 +214,42 @@ const MaintenanceModule: React.FC<MaintenanceModuleProps> = ({ user, onNavigate 
                               <option value="en_mantenimiento">Pendiente</option>
                            </select>
                         </div>
+                     </div>
+
+                     <div className="space-y-4 pt-2 border-t border-gray-50">
+                        <div className="flex items-center justify-between">
+                           <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Intervención de Empresa Externa</label>
+                           <button 
+                              type="button"
+                              onClick={() => setForm({...form, isExternal: !form.isExternal})}
+                              className={`w-12 h-6 rounded-full transition-all relative ${form.isExternal ? 'bg-yellow-400' : 'bg-gray-200'}`}
+                           >
+                              <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all ${form.isExternal ? 'left-7' : 'left-1'}`} />
+                           </button>
+                        </div>
+                        
+                        {form.isExternal && (
+                           <div className="space-y-4 animate-in slide-in-from-top-2">
+                              <div className="space-y-2">
+                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Nombre de la Empresa</label>
+                                 <ProviderAutocomplete 
+                                    value={form.externalCompany}
+                                    onChange={(val) => setForm({...form, externalCompany: val})}
+                                    placeholder="Buscar empresa externa..."
+                                    className="w-full"
+                                 />
+                              </div>
+                              <div className="space-y-2">
+                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Coste Mano de Obra (€)</label>
+                                 <input 
+                                    type="number"
+                                    value={form.laborCost}
+                                    onChange={e => setForm({...form, laborCost: Number(e.target.value)})}
+                                    className="w-full p-4 bg-gray-50 border border-gray-100 rounded-2xl text-xs font-bold outline-none"
+                                 />
+                              </div>
+                           </div>
+                        )}
                      </div>
                   </div>
 

@@ -16,6 +16,7 @@ import {
 import { motion, AnimatePresence } from 'motion/react';
 import { RequestItem, UrgencyLevel, User as UserType, RequestCategory, Role } from '../types';
 import { storageService } from '../services/storageService';
+import { compressImage } from '../lib/imageUtils';
 import { getLocalDateString } from '../services/dateUtils';
 import { db } from '../firebase';
 import { collection, onSnapshot, query } from 'firebase/firestore';
@@ -52,6 +53,7 @@ const USACManagerPanel: React.FC<USACManagerPanelProps> = ({ currentUser }) => {
   const [requests, setRequests] = useState<RequestItem[]>([]);
   const [selectedRequest, setSelectedRequest] = useState<RequestItem | null>(null);
   const [filterType, setFilterType] = useState<'all' | 'peticion' | 'material' | 'stats' | 'providers' | 'blueprints' | 'ppts' | 'oca'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_progress' | 'closed'>('all');
   const [timeRange, setTimeRange] = useState<'month' | 'year'>('month');
   const [aiStructuralLoading, setAiStructuralLoading] = useState(false);
   const [now, setNow] = useState(new Date());
@@ -121,6 +123,13 @@ const USACManagerPanel: React.FC<USACManagerPanelProps> = ({ currentUser }) => {
     return [...requests]
       .filter(r => r.status !== 'resolved_by_ai') // En la lista de tareas no mostramos las resueltas por IA
       .filter(r => filterType === 'all' || r.type === filterType)
+      .filter(r => {
+        if (statusFilter === 'all') return true;
+        if (statusFilter === 'pending') return r.status === 'open' || r.status === 'asignada';
+        if (statusFilter === 'in_progress') return r.status === 'in_progress' || r.status === 'aprobada';
+        if (statusFilter === 'closed') return r.status === 'closed';
+        return true;
+      })
       .sort((a, b) => {
         const chronicA = a.isChronic ? 50 : 0;
         const chronicB = b.isChronic ? 50 : 0;
@@ -227,7 +236,16 @@ const USACManagerPanel: React.FC<USACManagerPanelProps> = ({ currentUser }) => {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => setAfterImage(reader.result as string);
+      reader.onloadend = async () => {
+        const base64 = reader.result as string;
+        try {
+          const compressed = await compressImage(base64, 1200, 1200, 0.7);
+          setAfterImage(compressed);
+        } catch (err) {
+          console.error("Compression error:", err);
+          setAfterImage(base64);
+        }
+      };
       reader.readAsDataURL(file);
     }
   };
@@ -493,6 +511,20 @@ _Solicitado vía SIGAI USAC_`;
         ))}
       </div>
 
+      {isMaster && (filterType === 'all' || filterType === 'peticion' || filterType === 'material') && (
+        <div className="flex bg-gray-50 p-1 rounded-2xl mx-2 gap-1 border border-gray-100">
+          {(['all', 'pending', 'in_progress', 'closed'] as const).map(s => (
+            <button
+              key={s}
+              onClick={() => setStatusFilter(s)}
+              className={`flex-1 py-2.5 rounded-xl text-[7px] font-black uppercase tracking-[0.15em] transition-all ${statusFilter === s ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-400'}`}
+            >
+              {s === 'all' ? 'Ver Todo' : s === 'pending' ? 'Pendientes' : s === 'in_progress' ? 'En Trámite' : 'Cerradas'}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* SECCIÓN DE RECURSOS Y ANÁLISIS (Bento Grid) */}
       <div className="px-2">
         <div className="bg-gray-50 rounded-[2.5rem] p-4 border border-gray-100">
@@ -753,6 +785,9 @@ _Solicitado vía SIGAI USAC_`;
                         {r.type === 'peticion' ? <Wrench className="w-5 h-5" /> : <Package className="w-5 h-5" />}
                       </div>
                       <div>
+                        {r.registrationNumber && (
+                          <div className="text-[7px] font-black text-blue-500 uppercase tracking-widest mb-0.5">{r.registrationNumber}</div>
+                        )}
                         <div className="font-black uppercase text-[10px] text-gray-900 leading-none mb-1">{r.unit}</div>
                         <div className="text-[8px] font-bold text-gray-400 uppercase">{new Date(r.date).toLocaleDateString()}</div>
                       </div>
@@ -794,8 +829,12 @@ _Solicitado vía SIGAI USAC_`;
                     {selectedRequest.type === 'peticion' ? <Wrench className="w-6 h-6 text-white" /> : <Package className="w-6 h-6 text-white" />}
                   </div>
                   <div>
-                    <h3 className="text-xl font-black uppercase tracking-tight leading-none">{selectedRequest.unit}</h3>
-                    <p className="text-[9px] text-gray-400 font-black uppercase mt-1">{selectedRequest.category}</p>
+                    <h3 className="text-xl font-black uppercase tracking-tight leading-none mb-1">
+                      {selectedRequest.registrationNumber || selectedRequest.unit}
+                    </h3>
+                    <p className="text-[9px] text-gray-400 font-black uppercase">
+                      {selectedRequest.registrationNumber ? `${selectedRequest.unit} - ${selectedRequest.category}` : selectedRequest.category}
+                    </p>
                   </div>
                </div>
                <button onClick={() => { setSelectedRequest(null); setShowWorkReportForm(false); }} className="p-2 text-white/30 hover:text-white"><XCircle className="w-6 h-6" /></button>

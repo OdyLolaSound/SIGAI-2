@@ -285,6 +285,9 @@ const TaskForm: React.FC<TaskFormProps> = ({ user, initialDate, task, onClose })
 
     recognition.onerror = (event: any) => {
       console.error("Speech recognition error:", event.error);
+      if (event.error === 'not-allowed') {
+        alert("Error: Permiso de micrófono denegado. Actívalo en tu navegador.");
+      }
       setIsRecording(false);
     };
 

@@ -5,6 +5,7 @@ import { extractReadingsForService, parseEuropeanNumber } from '../services/gemi
 import { storageService } from '../services/storageService';
 import { getLocalDateString, parseDateString } from '../services/dateUtils';
 import { Reading, ServiceType, Building, ReadingOrigin, User } from '../types';
+import { compressImage } from '../lib/imageUtils';
 
 interface ScannerProps {
   serviceType: ServiceType;
@@ -43,10 +44,18 @@ const Scanner: React.FC<ScannerProps> = ({ serviceType, building, user, onComple
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
+      reader.onloadend = async () => {
         const base64 = reader.result as string;
-        setImage(base64);
-        processImage(base64);
+        try {
+          // Compress for OCR and storage (slightly higher quality for OCR)
+          const compressed = await compressImage(base64, 1200, 1200, 0.8);
+          setImage(compressed);
+          processImage(compressed);
+        } catch (err) {
+          console.error("Compression error:", err);
+          setImage(base64);
+          processImage(base64);
+        }
       };
       reader.readAsDataURL(file);
     }

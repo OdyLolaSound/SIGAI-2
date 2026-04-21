@@ -328,7 +328,8 @@ export enum AppTab {
   BLUEPRINTS = 'blueprints',
   PPTS = 'ppts',
   OCA = 'oca',
-  RTI = 'rti'
+  RTI = 'rti',
+  PROVIDERS = 'providers'
 }
 
 export interface Reading {

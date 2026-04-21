@@ -36,14 +36,14 @@ service cloud.firestore {
     
     function isAdmin() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'MASTER' || 
-         (request.auth.token.email == "JCYebenes@gmail.com" && request.auth.token.email_verified == true) ||
-         (request.auth.token.email == "jyebavi@sigai.local"));
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'MASTER') || 
+         request.auth.token.email == "JCYebenes@gmail.com" ||
+         request.auth.token.email == "jyebavi@sigai.local");
     }
 
     function isOficina() {
       return isAuthenticated() && 
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userCategory == 'Oficina de Control' || isAdmin());
+        ((exists(/databases/$(database)/documents/users/$(request.auth.uid)) && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.userCategory == 'Oficina de Control') || isAdmin());
     }
 
     function hasOnlyAllowedFields(fields) {
@@ -76,6 +76,20 @@ service cloud.firestore {
              data.status is string &&
              (!('maintenanceCompany' in data) || (data.maintenanceCompany is string && data.maintenanceCompany.size() < 200)) &&
              (!('budgetAmount' in data) || data.budgetAmount is number);
+    }
+
+    function isValidRTIWork(data) {
+      return data.id is string && data.location is string && data.description is string &&
+             data.status in ['pendiente', 'ejecutado'] && data.unitId is string;
+    }
+
+    function isValidRTIReport(data) {
+      return data.id is string && data.inspectionDate is string && data.nextInspectionDate is string &&
+             data.status in ['vigente', 'vencido'];
+    }
+
+    function isValidPPTExecution(data) {
+      return data.id is string && data.pptId is string && data.visitDate is string;
     }
 
     // Collection Rules
@@ -176,7 +190,28 @@ service cloud.firestore {
     match /oca_certificates/{id} {
       allow read: if isAuthenticated();
       allow create, update: if isOficina() && isValidOCACertificate(request.resource.data);
-      allow delete: if isAdmin();
+      allow delete: if isOficina();
+    }
+
+    // RTI Works
+    match /rti_works/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOficina() && isValidRTIWork(request.resource.data);
+      allow delete: if isOficina();
+    }
+
+    // RTI Reports
+    match /rti_reports/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOficina() && isValidRTIReport(request.resource.data);
+      allow delete: if isOficina();
+    }
+
+    // PPT Executions
+    match /ppt_executions/{id} {
+      allow read: if isAuthenticated();
+      allow create, update: if isOficina() && isValidPPTExecution(request.resource.data);
+      allow delete: if isOficina();
     }
 
     // Default deny

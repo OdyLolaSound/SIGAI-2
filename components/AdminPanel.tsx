@@ -147,7 +147,7 @@ const AdminPanel: React.FC<AdminPanelProps> = ({ currentUser }) => {
   const filteredUsers = users.filter(u => u.id !== currentUser.id);
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-500 pb-20">
+    <div className="space-y-8 animate-in fade-in duration-500 pb-20 w-full max-w-sm md:max-w-7xl mx-auto">
       <div className="text-center">
         <h2 className="text-2xl font-black uppercase tracking-tight text-gray-900">
           {isMaster ? 'GESTIÓN MAESTRA DE PERSONAL' : 'GESTIÓN DE PERSONAL'}

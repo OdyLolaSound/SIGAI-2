@@ -7,12 +7,13 @@ import {
   ChevronDown, ListChecks, CalendarPlus, MapPin, Settings
 } from 'lucide-react';
 import { storageService, BUILDINGS } from '../services/storageService';
-import { PPT, PPTTask, User, UrgencyLevel, CalendarTask, OCACertificate } from '../types';
+import { PPT, PPTTask, User, UrgencyLevel, CalendarTask, OCACertificate, Provider } from '../types';
 import { getLocalDateString } from '../services/dateUtils';
 import { GoogleGenAI } from "@google/genai";
 import VisitCertificate from './VisitCertificate';
 import PPTExecutionControl from './PPTExecutionControl';
 import PPTExecutionHistory from './PPTExecutionHistory';
+import ProviderAutocomplete from './ProviderAutocomplete';
 
 interface PPTModuleProps {
   user: User;
@@ -475,12 +476,11 @@ const PPTModule: React.FC<PPTModuleProps> = ({ user }) => {
                   </div>
                   <div className="space-y-2">
                     <label className="text-[10px] font-black uppercase text-gray-400 px-2 tracking-widest">Empresa</label>
-                    <input 
-                      type="text" 
-                      value={newPpt.companyName}
-                      onChange={e => setNewPpt({...newPpt, companyName: e.target.value})}
-                      className="w-full p-5 bg-gray-50 rounded-2xl font-bold text-xs outline-none"
+                    <ProviderAutocomplete 
+                      value={newPpt.companyName || ''}
+                      onChange={val => setNewPpt({...newPpt, companyName: val})}
                       placeholder="Nombre empresa..."
+                      className="w-full"
                     />
                   </div>
                 </div>
