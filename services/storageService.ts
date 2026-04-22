@@ -1,11 +1,12 @@
 
-import { Reading, Building, ServiceType, Role, User, UserStatus, UserCategory, RequestItem, GasoilTank, Boiler, BoilerTemperatureReading, BoilerMaintenanceRecord, BoilerPart, BoilerStatus, SaltWarehouse, SaltSoftener, CalendarTask, AppNotification, GasoilReading, RefuelRequest, SaltRefillLog, SaltEntryLog, ExternalUser, WaterAccount, WaterSyncLog, GasoilAlertStatus, Provider, MaterialCategory, MaterialItem, LeaveEntry, Blueprint, PPT, OCACertificate, PPTExecution, RTIWork, RTIReport } from '../types';
+import { Reading, Building, ServiceType, Role, User, UserStatus, UserCategory, RequestItem, GasoilTank, Boiler, BoilerTemperatureReading, BoilerMaintenanceRecord, BoilerPart, BoilerStatus, SaltWarehouse, SaltSoftener, CalendarTask, AppNotification, GasoilReading, RefuelRequest, SaltRefillLog, SaltEntryLog, ExternalUser, WaterAccount, WaterSyncLog, GasoilAlertStatus, Provider, MaterialCategory, MaterialItem, LeaveEntry, Blueprint, PPT, OCACertificate, PPTExecution, RTIWork, RTIReport, PhoneContact } from '../types';
 import { getLocalDateString, isWorkDay, isWeekend, parseDateString } from './dateUtils';
 import { db, auth, handleFirestoreError, OperationType } from '../firebase';
 import { collection, doc, setDoc, getDocs, onSnapshot, query, updateDoc, deleteDoc, getDoc, where } from 'firebase/firestore';
 import { ALL_BUILDINGS } from './buildingsData';
 import { OCA_SEEDS } from './ocaSeeds';
 import { RTI_REPORT_SEED, RTI_WORKS_SEED } from './rtiSeeds';
+import { PHONE_SEEDS } from './phoneSeeds';
 
 // Constants that don't change
 export const BUILDINGS: Building[] = ALL_BUILDINGS;
@@ -46,7 +47,8 @@ let cache: any = {
   oca_certificates: [],
   ppt_executions: [],
   rti_works: [],
-  rti_reports: []
+  rti_reports: [],
+  phone_contacts: []
 };
 
 // UI Listeners to trigger re-renders
@@ -661,6 +663,7 @@ export const storageService = {
       storageService.seedOCAData();
       storageService.seedPPTData();
       storageService.seedRTIData();
+      storageService.seedPhoneDirectory();
       
       // Check expirations on start
       setTimeout(() => storageService.checkContractExpirations(), 2000);
@@ -696,6 +699,7 @@ export const storageService = {
       setupListener('ppt_executions', 'ppt_executions'),
       setupListener('rti_works', 'rti_works'),
       setupListener('rti_reports', 'rti_reports'),
+      setupListener('phone_contacts', 'phone_contacts'),
     ];
   },
 
@@ -1568,6 +1572,45 @@ export const storageService = {
       handleFirestoreError(e, OperationType.DELETE, 'rti_works');
     }
   },
+
+  seedPhoneDirectory: async () => {
+    // Only seed if the collection is relatively empty, to avoid double-seeding on every reload
+    // But since the user wants the full list, let's check if the count matches roughly.
+    if (cache.phone_contacts.length >= PHONE_SEEDS.length) return;
+    
+    console.log(`[DEBUG] Seeding ${PHONE_SEEDS.length} phone contacts...`);
+    for (const seed of PHONE_SEEDS) {
+      const safeLastName = (seed.lastName || '').replace(/\s/g, '_');
+      const safeUnit = seed.unit.replace(/\s/g, '_');
+      const id = `phone_${safeUnit}_${seed.order}_${safeLastName}`;
+      const contact: PhoneContact = { ...seed, id };
+      try {
+        await setDoc(doc(db, 'phone_contacts', id), cleanData(contact));
+      } catch (e) {
+        console.error(`[DEBUG] Error seeding contact ${id}:`, e);
+      }
+    }
+  },
+
+  // --- PHONE DIRECTORY ---
+  getPhoneContacts: (): PhoneContact[] => {
+    return (cache.phone_contacts as PhoneContact[]).sort((a, b) => (a.order || 0) - (b.order || 0));
+  },
+  savePhoneContact: async (contact: PhoneContact) => {
+    try {
+      await setDoc(doc(db, 'phone_contacts', contact.id), cleanData(contact));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.CREATE, 'phone_contacts');
+    }
+  },
+  deletePhoneContact: async (id: string) => {
+    try {
+      await deleteDoc(doc(db, 'phone_contacts', id));
+    } catch (e) {
+      handleFirestoreError(e, OperationType.DELETE, 'phone_contacts');
+    }
+  },
+
   subscribe: (listener: () => void) => {
     uiListeners.push(listener);
     return () => {

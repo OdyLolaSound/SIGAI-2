@@ -6,7 +6,7 @@ import {
   ChevronRight, ArrowUpRight, ArrowDownRight, AlertCircle,
   TrendingUp, Settings, ShieldAlert, Timer, CheckCircle2,
   Warehouse, FileSpreadsheet, HardHat, Fuel, Globe, Bell,
-  Wrench, X, Clock, CalendarDays, ShieldCheck, ClipboardCheck
+  Wrench, X, Clock, CalendarDays, ShieldCheck, ClipboardCheck, Phone
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { AppTab, User, ServiceType, Building, Role, UrgencyLevel, AppNotification } from '../types';
@@ -581,6 +581,13 @@ const UnitDashboard: React.FC<UnitDashboardProps> = ({ user, activeUnit, onNavig
                   </div>
 
                   <div className="space-y-4">
+                    <button 
+                      onClick={() => onNavigate(AppTab.PHONE_GUIDE)}
+                      className="w-full h-fit p-6 md:p-8 bg-white border-2 border-gray-900 text-gray-900 rounded-[2rem] font-black uppercase tracking-widest text-[10px] md:text-sm shadow-xl flex items-center justify-center gap-4 active:scale-95 transition-all text-center group hover:bg-gray-900 hover:text-yellow-400 transition-colors"
+                    >
+                      <Phone className="w-5 h-5 md:w-7 md:h-7 group-hover:scale-110 transition-transform" /> Guía Telefónica SIGAI
+                    </button>
+
                     <button 
                       onClick={() => onNavigate(AppTab.USAC_MANAGER)}
                       className="w-full h-fit p-6 md:p-8 bg-gray-900 text-yellow-400 rounded-[2rem] font-black uppercase tracking-widest text-[10px] md:text-sm shadow-2xl flex items-center justify-center gap-4 active:scale-95 transition-all text-center"

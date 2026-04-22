@@ -1095,7 +1095,7 @@ const AIRequestFlow: React.FC<AIRequestFlowProps> = ({ user, onClose, onComplete
                 <div className="grid grid-cols-2 gap-4">
                   <button 
                     onClick={() => {
-                      const text = `Hola, he registrado una nueva petición en SIGAI-USAC. \n\n📋 *Seguimiento:* ${createdRequest.registrationNumber}\n📍 *Ubicación:* ${createdRequest.locationData?.buildingName || 'No especificada'}\n⚠️ *Incidencia:* ${createdRequest.title}`;
+                      const text = `Hola, he registrado una nueva petición en SIGAI-USAC. \n\n📋 *Seguimiento:* ${createdRequest.registrationNumber}\n📍 *Ubicación:* ${createdRequest.locationData?.buildingName || 'No especificada'}\n⚠️ *Incidencia:* ${createdRequest.description}`;
                       window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, '_blank');
                     }}
                     className="flex flex-col items-center gap-3 p-6 bg-[#25D366]/10 text-[#075E54] rounded-[2.5rem] border border-[#25D366]/20 active:scale-95 transition-all hover:bg-[#25D366]/20"

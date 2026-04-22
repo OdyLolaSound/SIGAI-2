@@ -2,11 +2,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Mic, MicOff, Loader2, X, AlertCircle, CheckCircle2, 
-  Phone, Calendar as CalendarIcon, User as UserIcon,
+  Phone, Calendar as CalendarIcon, User as UserIcon, Mail,
   Zap, Droplets, Flame, Users, Bell, Info, ArrowRight
 } from 'lucide-react';
 import { GoogleGenAI, Type } from "@google/genai";
-import { AppTab, CalendarTask, User, Provider, ServiceType, Reading } from '../types';
+import { AppTab, CalendarTask, User, Provider, ServiceType, Reading, PhoneContact } from '../types';
 import { storageService, BUILDINGS } from '../services/storageService';
 import { motion, AnimatePresence } from 'motion/react';
 
@@ -25,6 +25,7 @@ type VoiceActionType =
   | 'ADD_READING' 
   | 'CHECK_TEAM' 
   | 'CHECK_ALERTS' 
+  | 'SEARCH_CONTACT'
   | 'UNKNOWN';
 
 interface VoiceActionResult {
@@ -37,6 +38,7 @@ interface VoiceActionResult {
     priority: 'Baja' | 'Media' | 'Alta' | 'Crítica';
   };
   providerQuery?: string;
+  contactQuery?: string;
   statusQuery?: {
     service: ServiceType;
     buildingId?: string;
@@ -56,6 +58,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [foundProvider, setFoundProvider] = useState<Provider | null>(null);
+  const [foundContact, setFoundContact] = useState<PhoneContact | null>(null);
   const [statusResult, setStatusResult] = useState<any>(null);
   const recognitionRef = useRef<any>(null);
 
@@ -100,6 +103,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
     setError(null);
     setSuccessMessage(null);
     setFoundProvider(null);
+    setFoundContact(null);
     setStatusResult(null);
     setIsListening(true);
     try {
@@ -129,6 +133,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
     setError(null);
     setSuccessMessage(null);
     setFoundProvider(null);
+    setFoundContact(null);
     setStatusResult(null);
 
     try {
@@ -140,21 +145,22 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
         contents: `El usuario ha dicho: "${text}". Hoy es ${new Date().toLocaleDateString('es-ES')}.
         Tu tarea es analizar la intención del usuario y devolver un JSON estructurado.
         
-        Pestañas: home, history, settings, ai_request, ai_material, usac_manager, calendar (Agenda/Calendario de tareas), team, gasoil, boilers, salt, temperatures, maintenance, water_sync, tools, oca, ppts, blueprints, rti, providers (Agenda de Contactos/Proveedores).
+        Pestañas: home, history, settings, ai_request, ai_material, usac_manager, calendar (Agenda/Calendario de tareas), team, gasoil, boilers, salt, temperatures, maintenance, water_sync, tools, oca, ppts, blueprints, rti, providers (Empresas externa), phone_guide (Guía telefónica del personal/unidad).
         Edificios disponibles: ${buildingsList}
         Servicios: luz, agua, caldera, gasoil, sal.
 
         Estructura del JSON:
         {
-          "type": "NAVIGATE" | "CREATE_TASK" | "SEARCH_PROVIDER" | "GET_STATUS" | "ADD_READING" | "CHECK_TEAM" | "CHECK_ALERTS" | "UNKNOWN",
+          "type": "NAVIGATE" | "CREATE_TASK" | "SEARCH_PROVIDER" | "SEARCH_CONTACT" | "GET_STATUS" | "ADD_READING" | "CHECK_TEAM" | "CHECK_ALERTS" | "UNKNOWN",
           "tab": "nombre_pestaña",
           "task": { 
             "title": "título", 
             "description": "desc", 
-            "startDate": "YYYY-MM-DD (usa ${new Date().toISOString().split('T')[0]} por defecto si no se menciona fecha)", 
+            "startDate": "YYYY-MM-DD", 
             "priority": "Baja"|"Media"|"Alta"|"Crítica" 
           },
-          "providerQuery": "nombre",
+          "providerQuery": "nombre_empresa",
+          "contactQuery": "nombre_o_cargo_personal",
           "statusQuery": { "service": "luz"|"agua"|"caldera"|"gasoil"|"sal", "buildingId": "ID_EDIFICIO" },
           "reading": { "service": "luz"|"agua", "value": 123.45, "buildingId": "ID_EDIFICIO" },
           "message": "mensaje para el usuario"
@@ -162,7 +168,8 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
 
         Instrucciones adicionales:
         - Si el usuario dice "apuntar", "agendar" o "añadir a la agenda" sin especificar "proveedores", usa CREATE_TASK.
-        - Si el usuario busca una empresa o contacto, usa SEARCH_PROVIDER.
+        - Si el usuario busca una empresa externa o proveedor de servicios, usa SEARCH_PROVIDER.
+        - Si el usuario busca el teléfono, mail o contacto de una persona de la unidad (ej: "busca el teléfono del Coronel", "mail de habilitación"), usa SEARCH_CONTACT.
         - Sé conciso en el "message".`,
         config: {
           temperature: 0.1,
@@ -170,7 +177,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
           responseSchema: {
             type: Type.OBJECT,
             properties: {
-              type: { type: Type.STRING, enum: ["NAVIGATE", "CREATE_TASK", "SEARCH_PROVIDER", "GET_STATUS", "ADD_READING", "CHECK_TEAM", "CHECK_ALERTS", "UNKNOWN"] },
+              type: { type: Type.STRING, enum: ["NAVIGATE", "CREATE_TASK", "SEARCH_PROVIDER", "SEARCH_CONTACT", "GET_STATUS", "ADD_READING", "CHECK_TEAM", "CHECK_ALERTS", "UNKNOWN"] },
               tab: { type: Type.STRING },
               task: {
                 type: Type.OBJECT,
@@ -183,6 +190,7 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
                 required: ["title", "startDate", "priority"]
               },
               providerQuery: { type: Type.STRING },
+              contactQuery: { type: Type.STRING },
               statusQuery: {
                 type: Type.OBJECT,
                 properties: {
@@ -277,6 +285,26 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
               setSuccessMessage(`He encontrado al proveedor: ${found.name}`);
             } else {
               setError(`No he encontrado ningún proveedor que coincida con "${result.providerQuery}".`);
+            }
+          }
+          break;
+
+        case 'SEARCH_CONTACT':
+          if (result.contactQuery) {
+            const contacts = storageService.getPhoneContacts();
+            const query = result.contactQuery.toLowerCase();
+            const found = contacts.find(c => 
+              c.name.toLowerCase().includes(query) || 
+              c.lastName.toLowerCase().includes(query) ||
+              c.role.toLowerCase().includes(query) ||
+              c.organization.toLowerCase().includes(query)
+            );
+            
+            if (found) {
+              setFoundContact(found);
+              setSuccessMessage(`He encontrado a: ${found.name} ${found.lastName}`);
+            } else {
+              setError(`No he encontrado ningún contacto con "${result.contactQuery}".`);
             }
           }
           break;
@@ -437,6 +465,46 @@ const VoiceAssistant: React.FC<VoiceAssistantProps> = ({ user, onNavigate, isOpe
                   <a href={`tel:${foundProvider.phone}`} className="flex items-center gap-3 p-3 bg-white rounded-2xl border border-gray-100 text-gray-900 active:scale-95 transition-all">
                     <Phone className="w-4 h-4 text-blue-500" />
                     <span className="text-xs font-black">{foundProvider.phone}</span>
+                  </a>
+                )}
+              </motion.div>
+            )}
+
+            {foundContact && (
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="bg-gray-900 border border-gray-100 p-5 rounded-3xl w-full text-left space-y-3 shadow-xl"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-yellow-400 rounded-xl shadow-sm text-black">
+                    <UserIcon className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <div className="text-[10px] font-black uppercase text-white leading-none">{foundContact.employment} {foundContact.name} {foundContact.lastName}</div>
+                    <div className="text-[8px] text-gray-400 font-bold uppercase tracking-widest mt-1">{foundContact.role}</div>
+                  </div>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-2">
+                  {foundContact.phone && (
+                    <a href={`tel:${foundContact.phone}`} className="flex items-center gap-2 p-2 bg-white/5 rounded-xl text-white active:scale-95 transition-all border border-white/10">
+                      <Phone className="w-3 h-3 text-yellow-400" />
+                      <span className="text-[10px] font-mono">{foundContact.phone}</span>
+                    </a>
+                  )}
+                  {foundContact.mobile && (
+                    <a href={`tel:${foundContact.mobile.split('-')[0]}`} className="flex items-center gap-2 p-2 bg-white/5 rounded-xl text-white active:scale-95 transition-all border border-white/10">
+                      <Phone className="w-3 h-3 text-yellow-400" />
+                      <span className="text-[10px] font-mono">{foundContact.mobile.split('-')[0]}</span>
+                    </a>
+                  )}
+                </div>
+
+                {foundContact.email && (
+                  <a href={`mailto:${foundContact.email}`} className="flex items-center gap-2 p-2 bg-white/5 rounded-xl text-white active:scale-95 transition-all border border-white/10 truncate">
+                    <Mail className="w-3 h-3 text-cyan-400 shrink-0" />
+                    <span className="text-[9px] font-bold truncate">{foundContact.email}</span>
                   </a>
                 )}
               </motion.div>

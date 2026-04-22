@@ -157,6 +157,25 @@
         "createdAt": { "type": "string" }
       },
       "required": ["id", "pptId", "visitDate", "performedBy"]
+    },
+    "PhoneContact": {
+      "title": "Phone Contact",
+      "description": "Organizational phone directory contact",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "order": { "type": "number" },
+        "unit": { "type": "string" },
+        "organization": { "type": "string" },
+        "role": { "type": "string" },
+        "employment": { "type": "string" },
+        "name": { "type": "string" },
+        "lastName": { "type": "string" },
+        "phone": { "type": "string" },
+        "mobile": { "type": "string" },
+        "email": { "type": "string" }
+      },
+      "required": ["id", "unit", "organization", "name"]
     }
   },
   "firestore": {
@@ -214,6 +233,10 @@
     "ppt_executions": {
       "schema": "PPTExecution",
       "description": "Record of maintenance task executions for a PPT"
+    },
+    "phone_contacts": {
+      "schema": "PhoneContact",
+      "description": "Organizational phone directory"
     }
   }
 }

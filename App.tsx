@@ -25,6 +25,7 @@ import PPTModule from './components/PPTModule';
 import BlueprintsModule from './components/BlueprintsModule';
 import ProvidersModule from './components/ProvidersModule';
 import { RTIModule } from './components/RTIModule';
+import PhoneGuide from './components/PhoneGuide';
 import VoiceAssistant from './components/VoiceAssistant';
 import { AppTab, ServiceType, Building, User, Role } from './types';
 import { Zap, Droplets, Flame, ShieldCheck, ChevronRight, User as UserIcon, LogOut, Crown, PlusCircle, LayoutGrid, UserPlus, MessageSquare, Package, ClipboardList, Calendar, Users, Bell, Phone, CheckCircle, Info, Mic } from 'lucide-react';
@@ -324,7 +325,7 @@ const App: React.FC = () => {
   };
 
   const handleBack = () => {
-    if ([AppTab.AI_REQUEST, AppTab.AI_MATERIAL, AppTab.USAC_MANAGER, AppTab.CALENDAR, AppTab.TEAM, AppTab.GASOIL, AppTab.BOILERS, AppTab.SALT, AppTab.TEMPERATURES, AppTab.MAINTENANCE, AppTab.WATER_SYNC, AppTab.HISTORY, AppTab.TOOLS, AppTab.OCA, AppTab.PPTS, AppTab.BLUEPRINTS, AppTab.RTI, AppTab.PROVIDERS].includes(activeTab)) {
+    if ([AppTab.AI_REQUEST, AppTab.AI_MATERIAL, AppTab.USAC_MANAGER, AppTab.CALENDAR, AppTab.TEAM, AppTab.GASOIL, AppTab.BOILERS, AppTab.SALT, AppTab.TEMPERATURES, AppTab.MAINTENANCE, AppTab.WATER_SYNC, AppTab.HISTORY, AppTab.TOOLS, AppTab.OCA, AppTab.PPTS, AppTab.BLUEPRINTS, AppTab.RTI, AppTab.PROVIDERS, AppTab.PHONE_GUIDE].includes(activeTab)) {
        setActiveTab(AppTab.HOME);
        setUnitMenuOpen(true);
        return;
@@ -398,6 +399,7 @@ const App: React.FC = () => {
     if (activeTab === AppTab.OCA && (currentUser?.role === 'MASTER' || currentUser?.userCategory === 'Oficina de Control')) return <OCAModule />;
     if (activeTab === AppTab.RTI && (currentUser?.role === 'MASTER' || currentUser?.userCategory === 'Oficina de Control')) return <RTIModule />;
     if (activeTab === AppTab.PROVIDERS) return <ProvidersModule onBack={() => { setActiveTab(AppTab.HOME); setUnitMenuOpen(true); }} />;
+    if (activeTab === AppTab.PHONE_GUIDE && currentUser) return <PhoneGuide currentUser={currentUser} />;
 
     if (activeTab === AppTab.TOOLS) {
       return <ToolsModule onBack={() => { setActiveTab(AppTab.HOME); setUnitMenuOpen(true); }} />;
@@ -534,7 +536,15 @@ const App: React.FC = () => {
     if (activeTab === AppTab.SETTINGS && currentUser) return (
       <div className="p-6 space-y-10 max-w-sm md:max-w-4xl mx-auto w-full pb-12">
          <div>
-           <h2 className="text-2xl font-black uppercase tracking-tighter mb-4">Mi Perfil</h2>
+           <div className="flex items-center justify-between mb-4">
+             <h2 className="text-2xl font-black uppercase tracking-tighter">Mi Perfil</h2>
+             <button 
+               onClick={() => setActiveTab(AppTab.PHONE_GUIDE)}
+               className="p-3 bg-white border border-gray-100 text-gray-400 hover:text-yellow-600 rounded-2xl transition-all shadow-sm flex items-center gap-2 text-[8px] font-black uppercase tracking-widest"
+             >
+               <Phone className="w-4 h-4" /> Guía Telefónica
+             </button>
+           </div>
            <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-xl flex items-center justify-between">
               <div className="flex items-center gap-4">
                  <div className={`p-4 rounded-2xl ${isMaster ? 'bg-yellow-400 text-black' : 'bg-gray-900 text-yellow-400'}`}>

@@ -92,6 +92,20 @@ service cloud.firestore {
       return data.id is string && data.pptId is string && data.visitDate is string;
     }
 
+    function isValidPhoneContact(data) {
+      return data.id is string && 
+             data.unit is string && 
+             data.organization is string && 
+             data.name is string && 
+             data.lastName is string &&
+             (!('phone' in data) || data.phone is string) &&
+             (!('mobile' in data) || data.mobile is string) &&
+             (!('email' in data) || data.email is string) &&
+             (!('employment' in data) || data.employment is string) &&
+             (!('role' in data) || data.role is string) &&
+             (!('order' in data) || data.order is number);
+    }
+
     // Collection Rules
     // ===============================================================
  
@@ -212,6 +226,12 @@ service cloud.firestore {
       allow read: if isAuthenticated();
       allow create, update: if isOficina() && isValidPPTExecution(request.resource.data);
       allow delete: if isOficina();
+    }
+
+    // Phone Directory
+    match /phone_contacts/{contactId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isValidPhoneContact(request.resource.data);
     }
 
     // Default deny

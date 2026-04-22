@@ -329,7 +329,8 @@ export enum AppTab {
   PPTS = 'ppts',
   OCA = 'oca',
   RTI = 'rti',
-  PROVIDERS = 'providers'
+  PROVIDERS = 'providers',
+  PHONE_GUIDE = 'phone_guide'
 }
 
 export interface Reading {
@@ -594,4 +595,18 @@ export interface RTIReport {
   fileName?: string;
   summary: string;
   status: 'vigente' | 'vencido';
+}
+
+export interface PhoneContact {
+  id: string;
+  order: number;
+  unit: string;
+  organization: string;
+  role: string;
+  employment?: string;
+  name: string;
+  lastName: string;
+  phone: string;
+  mobile: string;
+  email?: string;
 }
